@@ -1,0 +1,34 @@
+------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/gdoshi6/Dropbox/gd documents/Academics/Lectures/GA Tech/Econ Data Analysis/Spring 25/Problem Sets/PS 1/Nicaragua_RCT_C
+> odebook.txt
+  log type:  text
+ opened on:  15 Jan 2025, 15:28:50
+
+. 
+. // Display dataset information
+. describe
+
+Contains data
+ Observations:         1,270                  
+    Variables:            13                  
+------------------------------------------------------------------------------------------------------------------------------------------
+Variable      Storage   Display    Value
+    name         type    format    label      Variable label
+------------------------------------------------------------------------------------------------------------------------------------------
+formulario      double  %10.0g                Household id
+assign          byte    %8.0g                 Assignment to treatment group
+complier        byte    %8.0g                 =1 for households that wanted to participate
+treat           byte    %8.0g                 =1 for households that were treated
+income_r1       float   %9.0g                 Annual per capita income from main crop (PPP $) at baseline
+income_r2       float   %9.0g                 Annual per capita income from main crop (PPP $) at midline
+rubro           byte    %8.0g                 1 = beans, 2 = livestock, 3 = cassava
+age             byte    %8.0g                 Age of household (hh) head
+education       byte    %8.0g                 Years of education obtained by hh head
+mobcap          float   %9.0g                 Total value of mobile capital used on the farm
+fixcap          float   %9.0g                 Total value of fixed capital used on the farm
+land            float   %9.0g                 Farm size (unit: manzanas; 1 manzana = 1.7 acres)
+clustvar        int     %8.0g                 Cluster variable (used in sampling and stratification)
+------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.

@@ -1,0 +1,55 @@
+------------------------------------------------------------------------------------------------------------------------------------------
+
+. describe
+
+ Observations:       161,493                  
+    Variables:            43                  8 Oct 2024 23:25
+------------------------------------------------------------------------------------------------------------------------------------------
+Variable      Storage   Display    Value
+    name         type    format    label      Variable label
+------------------------------------------------------------------------------------------------------------------------------------------
+rectype         byte    %8.0g                 record type
+pldel3          byte    %8.0g                 facility of birth recode
+birattnd        byte    %8.0g                 attendant at birth
+cntocpop        byte    %8.0g                 county of occurence population
+dmage           byte    %8.0g                 age of mother
+ormoth          byte    %8.0g                 hispanic origin of mother
+mrace3          byte    %8.0g                 race of mother recode
+dmeduc          byte    %8.0g                 detailed educ of mother
+dmar            byte    %8.0g                 marital status of mother
+adequacy        byte    %8.0g                 adequacy of care recode
+nlbnl           byte    %8.0g                 number of live births, now living
+dlivord         byte    %8.0g                 number of live births, now dead
+totord9         byte    %8.0g                 total birth order recode
+monpre          byte    %8.0g                 month pregnancy prenatal care began
+nprevist        byte    %8.0g                 total number of prenatal visits
+isllb10         byte    %8.0g                 interval since last live birth recode
+dfage           byte    %8.0g                 age of father
+orfath          byte    %8.0g                 hispanic origin of father
+dfeduc          byte    %8.0g                 educ of father detail
+dgestat         byte    %8.0g                 gestation -- detail in weeks
+csex            byte    %8.0g                 sex of child
+dbrwt           int     %8.0g                 birthweight in grams
+dplural         byte    %8.0g                 plurality
+omaps           byte    %8.0g                 one minute agpar score
+fmaps           byte    %8.0g                 five minute agpar score
+clingest        byte    %8.0g                 clinical estimate of gestation
+anemia          byte    %8.0g                 anemia mother
+cardiac         byte    %8.0g                 cardiac disease mother (missing = 9)
+lung            byte    %8.0g                 acute or chronic lung disease mother (9)
+diabetes        byte    %8.0g                 diabetes mother (9)
+herpes          byte    %8.0g                 genital herpes mother (9)
+chyper          byte    %8.0g                 chronic hypertension (9)
+phyper          byte    %8.0g                 pregnancy related hypertension (9)
+pre4000         byte    %8.0g                 previous infant 4000 or more grams (9)
+preterm         byte    %8.0g                 previous preterm infant (9)
+tobacco         byte    %8.0g                 tobacco use during pregnancy (9)
+cigar6          byte    %8.0g                 average number of cigarettes per day recode (6)
+alcohol         byte    %8.0g                 alcohol use during pregnancy (9)
+drink5          byte    %8.0g                 average number of drinks recode (5)
+wgain           byte    %8.0g                 weight gain (99)
+------------------------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+
+. log off
+------------------------------------------------------------------------------------------------------------------------------------------
