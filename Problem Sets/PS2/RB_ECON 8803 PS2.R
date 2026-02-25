@@ -8,10 +8,13 @@ library(tidyverse)
 library(readr)
 library(gt)
 library(ggthemes)
+library(stargazer)
 
 # Import and manipulate data. --------------------------------------------
 
-df <- read.csv("pset2.csv")
+df <- read.csv(
+  "/Users/bwom/Documents/PhD/Spring 2026/8803 EDA/Problem Sets/PS2/pset2.csv"
+)
 # View(df)
 
 # 1a) Fix missing values. ------------------------------------------------
@@ -36,7 +39,7 @@ df[names(missing_codes)] <- lapply(names(missing_codes), function(col) {
   ifelse(df[[col]] %in% missing_codes[[col]], NA, df[[col]])
 })
 
-table(df$cardiac)
+# table(df$cardiac) # data validation test
 
 # 1b) Create analysis dataset. --------------------------------------------------
 
@@ -51,31 +54,46 @@ df_a <- df_a[, !(names(df_a) %in% c("stresfip", "birmon", "weekday"))]
 
 ## Summary Table 1: Demographic Variables
 # Variables for table 1
-vars_demo <- c("dmage", "dmeduc", "dfage", "dfeduc", "csex")
+t1c_vars <- c(
+  "dmage",
+  "dmeduc",
+  "dfage",
+  "dfeduc",
+  "csex",
+  "dgestat",
+  "wgain",
+  "monpre",
+  "nprevist"
+)
 
 # Create summary statistics with variables as rows
-t1c_demo <- data.frame(
+df_1c <- data.frame(
   Variable = c(
     "Mother's age",
     "Mother's education",
     "Father's age",
     "Father's education",
-    "Child sex"
+    "Child sex",
+    "Gestation (Weeks)",
+    "Weight Gain",
+    "First Month of Prenatal Care",
+    "Prenatal Visits"
   ),
-  Mean = sapply(vars_demo, function(v) round(mean(df_a[[v]], na.rm = TRUE), 2)),
-  Median = sapply(vars_demo, function(v) {
+  Mean = sapply(t1c_vars, function(v) round(mean(df_a[[v]], na.rm = TRUE), 2)),
+  Median = sapply(t1c_vars, function(v) {
     round(median(df_a[[v]], na.rm = TRUE), 2)
   }),
-  SD = sapply(vars_demo, function(v) round(sd(df_a[[v]], na.rm = TRUE), 2)),
-  Min = sapply(vars_demo, function(v) min(df_a[[v]], na.rm = TRUE)),
-  Max = sapply(vars_demo, function(v) max(df_a[[v]], na.rm = TRUE))
+  SD = sapply(t1c_vars, function(v) round(sd(df_a[[v]], na.rm = TRUE), 2)),
+  Min = sapply(t1c_vars, function(v) min(df_a[[v]], na.rm = TRUE)),
+  Max = sapply(t1c_vars, function(v) max(df_a[[v]], na.rm = TRUE))
 )
 
 # Format with gt
-t1c_demo %>%
+t_1c <-
+  df_1c %>%
   gt() %>%
   tab_header(
-    title = "Summary Statistics: Parental Demographics"
+    title = "Summary Statistics"
   ) %>%
   cols_label(
     Variable = "",
@@ -96,26 +114,29 @@ t1c_demo %>%
     table.width = pct(100)
   )
 
+# t_1c
+
 ## Summary Table 2: Maternal Child Health Outcome Variables
 
 ## Summary Table 3: Behavioral Variables
 
 # 1d) Histogram of birthweight. ------------------------------------------
 
-ggplot(df_a, aes(x = dbrwt)) +
+p_1d <- ggplot(df_a, aes(x = dbrwt)) +
   geom_histogram(bins = 30, fill = "#003057", color = "white") +
   geom_density() +
   labs(
-    title = "Histogram of Birth Weight",
-    x = "Birth Weight (grams)",
-    y = "Frequency"
+    title = "1d. Histogram of Birth Weight",
+    x = "Birth Weight (grams)"
   ) +
   theme_fivethirtyeight() +
   theme(
     plot.title = element_text(size = 14, face = "bold"),
-    axis.title = element_text(size = 11)
+    axis.title = element_text(size = 11),
+    axis.title.y = element_blank()
   )
-## need to put into plot
+
+# p_1d
 
 # 2a) Difference in birthweight by tobacco users vs non-users. -----------
 
@@ -124,7 +145,7 @@ df_2a <- df_a %>%
   summarize(n = n(), mean_brwt = mean(dbrwt), sd_brwt = sd(dbrwt)) %>%
   mutate(category = ifelse(tobacco == 1, "Smoker", "Non-Smoker"), .before = n)
 
-df_2a %>%
+t_2a <- df_2a %>%
   gt() %>%
   tab_header(
     title = "Birthweight by Tobacco Use"
@@ -146,10 +167,11 @@ df_2a %>%
     columns = everything()
   )
 
+# t_2a
 
 # 2b Balance table for causality. ----------------------------------------
 
-t_2b <- df_a %>%
+df_2b <- df_a %>%
   group_by(tobacco) %>%
   summarise(
     n = n(),
@@ -167,15 +189,19 @@ t_2b <- df_a %>%
     .before = n
   )
 
-t_2b_melt <- t_2b %>%
+df_2b_melt <- df_2b %>%
   select(-tobacco) %>%
-  pivot_longer(cols = -tobacco_status, names_to = "Characteristic", values_to = "Value") %>%
+  pivot_longer(
+    cols = -tobacco_status,
+    names_to = "Characteristic",
+    values_to = "Value"
+  ) %>%
   pivot_wider(names_from = tobacco_status, values_from = Value)
 
-t_2b_melt %>%
+t_2b <- df_2b_melt %>%
   gt() %>%
   tab_header(
-    title = "Characteristics by Smoking Status"
+    title = "Balance Table by Smoking Status"
   ) %>%
   cols_label(
     Characteristic = "Characteristic",
@@ -190,20 +216,20 @@ t_2b_melt %>%
     align = "center",
     columns = c(Smoker, `Non-smoker`)
   )
-
+t_2b
 
 # 3a Basic Linear Regression. --------------------------------------------
 
 # Define outcomes
 outcomes <- tribble(
-  ~outcome_var, ~outcome_label, ~scale,
-  "dbrwt", "Birth weight (grams)", 1,
-  "lbw", "Birth weight < 2500g (per 1000)", 1000,
-  "vlbw", "Birth weight < 1500g (per 1000)", 1000,
-  "elbw", "Birth weight < 1000g (per 1000)", 1000,
-  "dgestat", "Gestation length (weeks)", 1,
-  "preterm", "Premature birth < 32 weeks (per 1000)", 1000,
-  "fmaps", "5-minute APGAR score", 1
+  ~outcome_var , ~outcome_label                          , ~scale ,
+  "dbrwt"      , "Birth weight (grams)"                  ,      1 ,
+  "lbw"        , "Birth weight < 2500g (per 1000)"       ,   1000 ,
+  "vlbw"       , "Birth weight < 1500g (per 1000)"       ,   1000 ,
+  "elbw"       , "Birth weight < 1000g (per 1000)"       ,   1000 ,
+  "dgestat"    , "Gestation length (weeks)"              ,      1 ,
+  "preterm"    , "Premature birth < 32 weeks (per 1000)" ,   1000 ,
+  "fmaps"      , "5-minute APGAR score"                  ,      1
 )
 
 # Create binary outcome variables
@@ -216,30 +242,187 @@ df_a <- df_a %>%
   )
 
 # Control variables
-controls <- c("dmage", "dmeduc", "mrace3", "ormoth", "dmar",
-              "dfage", "dfeduc", "orfath",
-              "nlbnl", "dlivord", "totord9", "isllb10",
-              "monpre", "nprevist", "adequacy",
-              "alcohol", "drink5", "csex")
+controls <- c(
+  "dmage",
+  "dmeduc",
+  "mrace3",
+  "ormoth",
+  "dmar",
+  "dfage",
+  "dfeduc",
+  "orfath",
+  "nlbnl",
+  "dlivord",
+  "totord9",
+  "isllb10",
+  "monpre",
+  "nprevist",
+  "adequacy",
+  "alcohol",
+  "drink5",
+  "csex"
+)
 
 # Variables to exclude
-excluded <- c("dgestat", "phyper", "preterm", "pre4000",
-"anemia", "cardiac", "lung", "diabetes", "herpes", "chyper")
+excluded <- c(
+  "dgestat",
+  "phyper",
+  "preterm",
+  "pre4000",
+  "anemia",
+  "cardiac",
+  "lung",
+  "diabetes",
+  "herpes",
+  "chyper"
+)
 
-m_3a <- lm(dbrwt ~ tobacco + dmage + dmeduc + mrace3 + ormoth + dmar +
-                    dfage + dfeduc + orfath +
-                    nlbnl + dlivord + totord9 + isllb10 +
-                    monpre + nprevist + adequacy +
-                    alcohol + drink5 + csex + , 
-           data = df_a)
 
-summary(m_3a) 
+# 3a. Basic linear regression. -------------------------------------------
 
-m_3b <- lm(dbrwt ~ tobacco + dmage + dmeduc + mrace3 + ormoth + dmar +
-                    dfage + dfeduc + orfath +
-                    nlbnl + dlivord + totord9 + isllb10 +
-                    monpre + nprevist + adequacy +
-                    alcohol + drink5 + csex + dgestat + phyper + preterm + pre4000, 
-           data = df_a)
+m_3a <- lm(
+  dbrwt ~ tobacco +
+    dmage +
+    dmeduc +
+    mrace3 +
+    ormoth +
+    dmar +
+    dfage +
+    dfeduc +
+    orfath +
+    nlbnl +
+    dlivord +
+    totord9 +
+    isllb10 +
+    monpre +
+    nprevist +
+    adequacy +
+    alcohol +
+    drink5 +
+    csex,
+  data = df_a
+)
+
+summary(m_3a)
+
+stargazer(m_3a)
+
+# 3b. Adding in bad controls. --------------------------------------------
+
+m_3b <- lm(
+  dbrwt ~ tobacco +
+    dmage +
+    dmeduc +
+    mrace3 +
+    ormoth +
+    dmar +
+    dfage +
+    dfeduc +
+    orfath +
+    nlbnl +
+    dlivord +
+    totord9 +
+    isllb10 +
+    monpre +
+    nprevist +
+    adequacy +
+    alcohol +
+    drink5 +
+    csex +
+    dgestat +
+    phyper +
+    preterm +
+    pre4000,
+  data = df_a
+)
 
 summary(m_3b)
+
+
+# 3c. Add in cigar6 to m_3a. ---------------------------------------------
+m_3c <- lm(
+  dbrwt ~ tobacco +
+    dmage +
+    dmeduc +
+    mrace3 +
+    ormoth +
+    dmar +
+    dfage +
+    dfeduc +
+    orfath +
+    nlbnl +
+    dlivord +
+    totord9 +
+    isllb10 +
+    monpre +
+    nprevist +
+    adequacy +
+    alcohol +
+    drink5 +
+    csex +
+    cigar6,
+  data = df_a
+)
+
+summary(m_3c)
+
+
+# 3d. Interact smoking status with diabetes. -----------------------------
+
+m_3d <- lm(
+  dbrwt ~ tobacco *
+    diabetes +
+    dmage +
+    dmeduc +
+    mrace3 +
+    ormoth +
+    dmar +
+    dfage +
+    dfeduc +
+    orfath +
+    nlbnl +
+    dlivord +
+    totord9 +
+    isllb10 +
+    monpre +
+    nprevist +
+    adequacy +
+    alcohol +
+    drink5 +
+    csex,
+  data = df_a
+)
+
+summary(m_3d)
+
+# 4a. LPM for PS ---------------------------------------------------------
+
+m_4a_ps <- lm(
+  tobacco ~ dmage +
+    dmeduc +
+    mrace3 +
+    ormoth +
+    dmar +
+    dfage +
+    dfeduc +
+    orfath +
+    nlbnl +
+    dlivord +
+    totord9 +
+    isllb10 +
+    monpre +
+    nprevist +
+    adequacy +
+    alcohol +
+    drink5 +
+    csex,
+  data = df_a
+)
+
+df_a$p_score <- predict(m_4a_ps)
+
+# hist(df_a$p_score) # to see distribution of p-scores
+
+m_4a_ols <- lm(dbrwt ~ tobacco + p_score, data = df_a)
+
+summary(m_4a_ols)

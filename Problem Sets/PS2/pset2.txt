@@ -38,7 +38,7 @@ anemia          byte    %8.0g                 anemia mother
 cardiac         byte    %8.0g                 cardiac disease mother (missing = 9)
 lung            byte    %8.0g                 acute or chronic lung disease mother (9)
 diabetes        byte    %8.0g                 diabetes mother (9)
-herpes          byte    %8.0g                 genital herpes mother (9)
+herpes          byte    %8.0g                 genital herpes mother (8, 9)
 chyper          byte    %8.0g                 chronic hypertension (9)
 phyper          byte    %8.0g                 pregnancy related hypertension (9)
 pre4000         byte    %8.0g                 previous infant 4000 or more grams (9)
