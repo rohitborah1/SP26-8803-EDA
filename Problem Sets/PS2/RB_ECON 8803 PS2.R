@@ -8,92 +8,134 @@ library(tidyverse)
 library(readr)
 library(gt)
 library(ggthemes)
+library(broom)
+library(glmnet)
 library(stargazer)
 
 # Import and manipulate data. --------------------------------------------
 
-df <- read.csv(
+df_raw <- read.csv(
   "/Users/bwom/Documents/PhD/Spring 2026/8803 EDA/Problem Sets/PS2/pset2.csv"
 )
 # View(df)
 
 # 1a) Fix missing values. ------------------------------------------------
 
-missing_codes <- list(
-  cardiac = 9,
-  lung = 9,
-  diabetes = 9,
-  herpes = c(8, 9),
-  chyper = 9,
-  phyper = 9,
-  pre4000 = 9,
-  preterm = 9,
-  tobacco = 9,
-  cigar6 = 6,
-  alcohol = 9,
-  drink5 = 5,
-  wgain = 99
+df_raw <- df_raw %>%
+  mutate(
+    across(
+      c(
+        cardiac,
+        lung,
+        diabetes,
+        herpes,
+        chyper,
+        phyper,
+        pre4000,
+        preterm,
+        tobacco,
+        alcohol
+      ),
+      ~ na_if(., 9)
+    ),
+    herpes = na_if(herpes, 8),
+    cigar6 = na_if(cigar6, 6),
+    drink5 = na_if(drink5, 5),
+    wgain = na_if(wgain, 99)
+  )
+
+df_raw <- df_raw %>%
+  select(-stresfip, -birmon, -weekday) %>%
+  drop_na()
+
+binary_vars <- c(
+  "anemia",
+  "cardiac",
+  "lung",
+  "diabetes",
+  "herpes",
+  "chyper",
+  "phyper",
+  "pre4000",
+  "preterm",
+  "tobacco",
+  "alcohol"
 )
 
-df[names(missing_codes)] <- lapply(names(missing_codes), function(col) {
-  ifelse(df[[col]] %in% missing_codes[[col]], NA, df[[col]])
-})
+df_raw <- df_raw %>%
+  mutate(across(all_of(binary_vars), ~ ifelse(. == 1, 1, 0)))
 
-# table(df$cardiac) # data validation test
+# str(df) # data validation test
 
 # 1b) Create analysis dataset. --------------------------------------------------
 
 ## Remove observations with missing values.
-df_a <- df[complete.cases(df), ]
+df <- df_raw[complete.cases(df_raw), ]
 
 ## Remove instructed columns.
-df_a <- df_a[, !(names(df_a) %in% c("stresfip", "birmon", "weekday"))]
+df <- df[, !(names(df) %in% c("stresfip", "birmon", "weekday"))]
 
 
-# 1c) Produce a summary statistics table with mean, standard deviation, minimum, and maximum. ----
+# 1c_cnt.) Continuous Variables Summary Table-----------------------------
 
 ## Summary Table 1: Demographic Variables
 # Variables for table 1
-t1c_vars <- c(
+t1c_cnt_vars <- c(
   "dmage",
   "dmeduc",
+  "nlbnl",
+  "dlivord",
+  "totord9",
+  "monpre",
+  "nprevist",
+  "isllb10",
   "dfage",
   "dfeduc",
-  "csex",
   "dgestat",
-  "wgain",
-  "monpre",
-  "nprevist"
+  "dbrwt",
+  "clingest",
+  "cigar6",
+  "drink5",
+  "wgain"
 )
 
 # Create summary statistics with variables as rows
-df_1c <- data.frame(
+df_1c_cnt <- data.frame(
   Variable = c(
-    "Mother's age",
-    "Mother's education",
-    "Father's age",
-    "Father's education",
-    "Child sex",
-    "Gestation (Weeks)",
-    "Weight Gain",
-    "First Month of Prenatal Care",
-    "Prenatal Visits"
+    "Mother's Age",
+    "Mother's Education",
+    "Number of Live Births (Now Living)",
+    "Number of Live Births (Now Dead)",
+    "Total Birth Order",
+    "Month Prenatal Care Began",
+    "Total Number of Prenatal Visits",
+    "Interval Since Last Live Birth",
+    "Father's Age",
+    "Father's Education",
+    "Gestation - Detail in Weeks",
+    "Birthweight (g)",
+    "Clinical Estimate of Gestation",
+    "Avg Number of Cigarettes Per Day",
+    "Avg Number of Drinks",
+    "Weight Gain"
   ),
-  Mean = sapply(t1c_vars, function(v) round(mean(df_a[[v]], na.rm = TRUE), 2)),
-  Median = sapply(t1c_vars, function(v) {
-    round(median(df_a[[v]], na.rm = TRUE), 2)
+  Mean = sapply(t1c_cnt_vars, function(v) {
+    round(mean(df[[v]], na.rm = TRUE), 2)
   }),
-  SD = sapply(t1c_vars, function(v) round(sd(df_a[[v]], na.rm = TRUE), 2)),
-  Min = sapply(t1c_vars, function(v) min(df_a[[v]], na.rm = TRUE)),
-  Max = sapply(t1c_vars, function(v) max(df_a[[v]], na.rm = TRUE))
+  Median = sapply(t1c_cnt_vars, function(v) {
+    round(median(df[[v]], na.rm = TRUE), 2)
+  }),
+  SD = sapply(t1c_cnt_vars, function(v) round(sd(df[[v]], na.rm = TRUE), 2)),
+  Min = sapply(t1c_cnt_vars, function(v) min(df[[v]], na.rm = TRUE)),
+  Max = sapply(t1c_cnt_vars, function(v) max(df[[v]], na.rm = TRUE))
 )
 
 # Format with gt
-t_1c <-
-  df_1c %>%
+t_1c_cnt <-
+  df_1c_cnt %>%
   gt() %>%
   tab_header(
-    title = "Summary Statistics"
+    title = "Summary Statistics: Continuous Variables"
   ) %>%
   cols_label(
     Variable = "",
@@ -114,15 +156,92 @@ t_1c <-
     table.width = pct(100)
   )
 
-# t_1c
+t_1c_cnt
 
-## Summary Table 2: Maternal Child Health Outcome Variables
 
-## Summary Table 3: Behavioral Variables
+# 1c_cat Categorical Variables Summary Table------------------------------
+
+t1c_cat_vars <- c(
+  "csex1",
+  "dmar1",
+  "ormoth1",
+  "orfath1",
+  "dplural1",
+  "anemia",
+  "cardiac",
+  "lung",
+  "diabetes",
+  "herpes",
+  "chyper",
+  "phyper",
+  "pre4000",
+  "preterm",
+  "tobacco",
+  "alcohol"
+)
+
+df <- df %>%
+  mutate(dplural1 = ifelse(dplural > 1, 1, 0))
+df <- df %>%
+  mutate(csex1 = ifelse(csex > 1, 1, 0))
+df <- df %>%
+  mutate(dmar1 = ifelse(dmar > 1, 1, 0))
+df <- df %>%
+  mutate(ormoth1 = ifelse(ormoth %in% c(1, 2, 3, 4, 5), 1, 0))
+df <- df %>%
+  mutate(orfath1 = ifelse(orfath %in% c(1, 2, 3, 4, 5), 1, 0))
+
+df_1c_cat <- data.frame(
+  Variable = c(
+    "Female Children",
+    "Married Mothers",
+    "Hispanic Mothers",
+    "Hispanic Fathers",
+    "Multiple Births",
+    "Anemic Mothers",
+    "Mothers with Cardiac Disease",
+    "Mothers with Lung Disease",
+    "Diabetic Mothers",
+    "Mothers with Genital Herpes",
+    "Mothers with Chronic Hypertension",
+    "Mothers with Pregnancy-Related Hypertension",
+    "Previous Infants Weighing > 4000g",
+    "Previous Preterm Infants",
+    "Tobacco Use During Pregnancy",
+    "Alcohol Use During Pregnancy"
+  ),
+  N = sapply(t1c_cat_vars, function(v) sum(!is.na(df[[v]]))),
+  Proportion = sapply(t1c_cat_vars, function(v) {
+    round(mean(df[[v]], na.rm = TRUE), 3)
+  })
+)
+
+df_1c_cat
+
+# Format with gt
+t_1c_cat <-
+  df_1c_cat %>%
+  gt() %>%
+  tab_header(
+    title = "Summary Statistics: Categorical Variables"
+  ) %>%
+  cols_label(
+    Variable = "Variable",
+    N = "N",
+    Proportion = "Proportion"
+  ) %>%
+  tab_options(
+    table.font.size = 11,
+    heading.title.font.size = 13,
+    column_labels.font.weight = "bold",
+    table.width = pct(100)
+  )
+
+t_1c_cat
 
 # 1d) Histogram of birthweight. ------------------------------------------
 
-p_1d <- ggplot(df_a, aes(x = dbrwt)) +
+p_1d <- ggplot(df, aes(x = dbrwt)) +
   geom_histogram(bins = 30, fill = "#003057", color = "white") +
   geom_density() +
   labs(
@@ -140,7 +259,7 @@ p_1d <- ggplot(df_a, aes(x = dbrwt)) +
 
 # 2a) Difference in birthweight by tobacco users vs non-users. -----------
 
-df_2a <- df_a %>%
+df_2a <- df %>%
   group_by(tobacco) %>%
   summarize(n = n(), mean_brwt = mean(dbrwt), sd_brwt = sd(dbrwt)) %>%
   mutate(category = ifelse(tobacco == 1, "Smoker", "Non-Smoker"), .before = n)
@@ -167,11 +286,11 @@ t_2a <- df_2a %>%
     columns = everything()
   )
 
-# t_2a
+t_2a
 
 # 2b Balance table for causality. ----------------------------------------
 
-df_2b <- df_a %>%
+df_2b <- df %>%
   group_by(tobacco) %>%
   summarise(
     n = n(),
@@ -233,7 +352,7 @@ outcomes <- tribble(
 )
 
 # Create binary outcome variables
-df_a <- df_a %>%
+df <- df %>%
   mutate(
     lbw = as.numeric(dbrwt < 2500),
     vlbw = as.numeric(dbrwt < 1500),
@@ -300,12 +419,12 @@ m_3a <- lm(
     alcohol +
     drink5 +
     csex,
-  data = df_a
+  data = df
 )
 
 summary(m_3a)
 
-stargazer(m_3a)
+# stargazer(m_3a)
 
 # 3b. Adding in bad controls. --------------------------------------------
 
@@ -333,7 +452,7 @@ m_3b <- lm(
     phyper +
     preterm +
     pre4000,
-  data = df_a
+  data = df
 )
 
 summary(m_3b)
@@ -361,7 +480,7 @@ m_3c <- lm(
     drink5 +
     csex +
     cigar6,
-  data = df_a
+  data = df
 )
 
 summary(m_3c)
@@ -390,10 +509,46 @@ m_3d <- lm(
     alcohol +
     drink5 +
     csex,
-  data = df_a
+  data = df
 )
 
 summary(m_3d)
+
+
+# 3e. Oaxaca-Blinder -----------------------------------------------------
+
+m_3e <- lm(
+  dbrwt ~ tobacco *
+    (dmage +
+      dmeduc +
+      mrace3 +
+      ormoth +
+      dmar +
+      dfage +
+      dfeduc +
+      orfath +
+      nlbnl +
+      dlivord +
+      totord9 +
+      isllb10 +
+      monpre +
+      nprevist +
+      adequacy +
+      alcohol +
+      drink5),
+  data = df
+)
+
+df_3e_smoking <- df %>%
+  filter(tobacco == 1)
+
+df_3e_nonsmoking <- df %>%
+  filter(tobacco == 0)
+
+pred_smoking <- predict(m_3e, newdata = df_3e_smoking)
+pred_nonsmoking <- predict(m_3e, newdata = df_3e_nonsmoking)
+
+ate <- mean(pred_smoking) - mean(pred_nonsmoking)
 
 # 4a. LPM for PS ---------------------------------------------------------
 
@@ -416,13 +571,79 @@ m_4a_ps <- lm(
     alcohol +
     drink5 +
     csex,
-  data = df_a
+  data = df
 )
 
-df_a$p_score <- predict(m_4a_ps)
+df$p_score <- predict(m_4a_ps)
 
-# hist(df_a$p_score) # to see distribution of p-scores
+hist(df$p_score) # to see distribution of p-scores
 
-m_4a_ols <- lm(dbrwt ~ tobacco + p_score, data = df_a)
+m_4a_ols <- lm(dbrwt ~ tobacco + p_score, data = df)
 
 summary(m_4a_ols)
+
+
+# 4b. Logit P-Score ------------------------------------------------------
+
+m_4b_logit <- glm(
+  tobacco ~ dmage +
+    dmeduc +
+    mrace3 +
+    ormoth +
+    dmar +
+    dfage +
+    dfeduc +
+    orfath +
+    nlbnl +
+    dlivord +
+    totord9 +
+    isllb10 +
+    monpre +
+    nprevist +
+    adequacy +
+    alcohol +
+    drink5 +
+    csex,
+  data = df,
+  family = binomial(link = "logit")
+)
+
+summary(m_4b_logit)
+
+# 4c. P-Score Overlap Plot -----------------------------------------------
+
+# Store p-score in working dataset.
+df$pscore_logit <- predict(m_4b_logit, newdata = df, type = "response")
+
+p_4c <-
+  ggplot(df, aes(x = pscore_logit, fill = factor(tobacco))) +
+  geom_density(alpha = 0.5) +
+  labs(title = "4c. Propensity Score Overlap Plot", fill = "Smoking Status") +
+  theme_fivethirtyeight() +
+  theme(legend.position = "top", legend.title = element_text(face = "bold"))
+
+
+# 4d. ATE of Maternal Smoking on Birthweight Using OLS Controlling for P-Score ----
+
+m_4d <- lm(dbrwt ~ tobacco + pscore_logit, data = df)
+
+summary(m_4d)
+
+
+# 4e. Estimate ATE binned by propensity score. ---------------------------
+
+df_4e <- df %>%
+  mutate(bin_pscore = ntile(pscore_logit, 10))
+
+table(df_4e$bin_pscore, df_4e$tobacco)
+
+df_4e_block <- df_4e %>%
+  group_by(bin_pscore) %>%
+  summarize(
+    n = n(),
+    mean_diff = mean(dbrwt[tobacco == 1]) - mean(dbrwt[tobacco == 0])
+  )
+
+ate_block <- sum(df_4e_block$mean_diff * df_4e_block$n / sum(df_4e_block$n))
+
+# 4f. Hajek P-Score Weighting --------------------------------------------
