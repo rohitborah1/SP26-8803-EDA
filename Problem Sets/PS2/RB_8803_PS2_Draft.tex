@@ -25,12 +25,19 @@ The data here are "real" and quite imperfect, which will help to simulate the pa
     \item Produce a summary statistics table describing some of the key variables in the final analysis data set. A good summary table generally includes mean, standard deviation, minimum and maximum. Pay attention to how some variables are measured (continuously, categorically, etc.). This may be a large table, feel free to break it up as you feel appropriate. 
     \begin{figure}[h]
         \centering
-        \includegraphics[width=1\linewidth]{Economic Data Analysis//Problem Sets//PS2/t_1c.png}
+        \includegraphics[width=1\linewidth]{Economic Data Analysis//Problem Sets//PS2/t_1c_cnt.png}
     \end{figure}
+    \newpage
+     \begin{figure}[h]
+        \centering
+        \includegraphics[width=1\linewidth]{Economic Data Analysis//Problem Sets//PS2/t_1c_cat.png}
+    \end{figure}
+    
+    \newpage
     \item Generate (and report) a histogram of the birth weight variable. This is our outcome of interest.
     \begin{figure}[h]
         \centering
-        \includegraphics[width=0.8\linewidth]{Economic Data Analysis//Problem Sets//PS2/p_1d.png}
+        \includegraphics[width=1\linewidth]{Economic Data Analysis//Problem Sets//PS2/p_1d.png}
     \end{figure}
 \end{enumerate}
 
@@ -62,10 +69,9 @@ The data here are "real" and quite imperfect, which will help to simulate the pa
         \end{itemize}
         \item Bad controls: variables that can be causally affected by smoking, regardless of whether they are related to birthweight  
         \begin{itemize}
-            \item I would exclude the following covariates as bad controls impacted by smoking: dgestat, phyper, preterm, pre4000, anemia, cardiac, lung, diabetes, herpes, and chyper.
+            \item I would exclude the following covariates as bad controls impacted by smoking: dgestat, phyper, preterm, pre4000, anemia, cardiac, lung, diabetes, herpes, and chyper. Many of these diseases are heavily correlated with or can be caused by smoking.
         \end{itemize}
     \end{itemize}
-    For each category, explain your logic of classification \textbf{briefly}. Use your classification to decide on the list of covariates you'll keep for covariate adjustment for the rest of the problem set.
 \end{enumerate}
 
 \section{Regression adjustment}
@@ -73,11 +79,11 @@ Collect all the estimates and standard errors from the regressions and show thes
 \begin{enumerate}[(a)]
     \item Use a basic, uninteracted linear regression model to estimate the impact of smoking conditional on the set of pre-determined variables and report your estimates. Interpret the coefficient estimate. Under what circumstances does it identify the average treatment effect (ATE)?
     \begin{itemize}
-        \item The coefficient is 221 grams: the average baby born to non-smoking mothers weighs 221 grams more than babies born to smoking others with $p < 2 \times 10^{16}$.
-        \item This will identify the average treatment effect when treatment is effectively randomly assigned when controlling for covariates.
+        \item The coefficient is -221 grams: the average baby born to smoking mothers weighs 221 grams less than babies born to non-smoking mothers with $p < 2 \times 10^{16}$.
+        \item This will identify the average treatment effect when treatment is effectively randomly assigned when controlling for covariates. The ATE holds when the conditional independence holds.
     \end{itemize}
     \begin{longtable}{@{\extracolsep{5pt}}lc} 
- \caption{2a Regression Table} 
+  \caption{2a. Regression Table} 
   \label{} 
 \\[-1.8ex]\hline 
 \hline \\[-1.8ex] 
@@ -85,7 +91,7 @@ Collect all the estimates and standard errors from the regressions and show thes
 \cline{2-2} 
 \\[-1.8ex] & dbrwt \\ 
 \hline \\[-1.8ex] 
- tobacco & 221.027$^{***}$ \\ 
+ tobacco & $-$221.027$^{***}$ \\ 
   & (4.791) \\ 
   & \\ 
  dmage & $-$4.529$^{***}$ \\ 
@@ -133,7 +139,7 @@ Collect all the estimates and standard errors from the regressions and show thes
  adequacy & 62.395$^{***}$ \\ 
   & (4.925) \\ 
   & \\ 
- alcohol & $-$108.979$^{***}$ \\ 
+ alcohol & 108.979$^{***}$ \\ 
   & (34.766) \\ 
   & \\ 
  drink5 & $-$88.715$^{***}$ \\ 
@@ -142,8 +148,8 @@ Collect all the estimates and standard errors from the regressions and show thes
  csex & $-$124.636$^{***}$ \\ 
   & (3.286) \\ 
   & \\ 
- Constant & 3,127.834$^{***}$ \\ 
-  & (73.604) \\ 
+ Constant & 3,351.929$^{***}$ \\ 
+  & (23.029) \\ 
   & \\ 
 \hline \\[-1.8ex] 
 Observations & 114,610 \\ 
@@ -153,23 +159,24 @@ Residual Std. Error & 555.963 (df = 114590) \\
 F Statistic & 651.532$^{***}$ (df = 19; 114590) \\ 
 \hline 
 \hline \\[-1.8ex] 
-\textit{Note:}  & \multicolumn{1}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
+\textit{Note:}  & \multicolumn{1}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01}  \\ 
 \end{longtable} 
     \item For this part only, add to the specification in question 3(a) some "bad controls." Check if your estimate changes and discuss the direction of the change.
     \begin{itemize}
-        \item After adding back in \verb|dgestat|, \verb|phyper|, \verb|preterm|, and \verb|pre4000|, the new coefficient is 207.1g. I think this is because tobacco use directly affects all three of those variables, thereby reducing birthweight. The direction of the change makes sense.
+        \item After adding back in \verb|dgestat|, \verb|phyper|, \verb|preterm|, and \verb|pre4000|, the new coefficient is -207.1g. I think this is because tobacco use directly affects all three of those variables, thereby reducing birthweight. The direction of the change makes sense.
     \end{itemize}
     \item Now, add to the specification in question 3(a) the variable \verb|cigar6|. What happens to the coefficient on smoking status? Why do you think that happens?
     \begin{itemize}
-        \item The coefficient reduced all the way to 119.1g. This is because \verb|cigar6|, which is the recode variable for the average number of cigarettes per day, directly overlaps with tobacco usage.
+        \item The coefficient reduced all the way to -119.1g. This is because \verb|cigar6|, which is the recode variable for the average number of cigarettes per day, directly overlaps with tobacco usage.
     \end{itemize}
     \item Next, explore treatment effect heterogeneity by interacting smoking status with the indicator for whether the mother has diabetes. Use the same set of controls that you used in 3(a). Provide an interpretation of the interaction term (2-3 lines max).
     \begin{itemize}
-        \item When interacting tobacco usage with diabetes status, the coefficient goes to 94.2g with $p = 0.087$. Smoking reduces birthweight less for diabetic mothers than non-diabetic mothers.
+        \item When interacting tobacco usage with diabetes status, the estimate for the interaction term is 64.249. Here, the coefficient for tobacco at -222.815 and for diabetes alone at 40.022. The combined effect for diabetic mothers who smoke is -156.844 (-222 + 65.249).
     \end{itemize}
     \item Now, use the Oaxaca-Blinder logic to calculate the ATE (i.e., add interactions of covariates with smoking status). Briefly describe the exact steps you follow. Does your result differ substantially from the one in 3(a)? Intuitively,what does this tell us about treatment effect heterogeneity?
     \begin{itemize}
-        \item FLAGGED
+        \item We first ran a linear regression interacting smoking with all covariates. After creating new tables, one for smokers and one for non-smokers, we used R's \verb|predict| function to find the means of each dataset.
+        \item The average treatment effect between smoking and non-smoking mothers was -240.5, suggesting heterogeneity that varies by covariates.
     \end{itemize}
 \end{enumerate}
 
@@ -178,27 +185,107 @@ Collect all the ATE estimates and show these in one well-formatted table.
 \begin{enumerate}[(a)]
     \item Use a LPM to estimate propensity score using the covariates identified in 2c. Now, use the estimated p-score in an OLS regression of birthweight on smoking status. What do you observe? Why is that?
     \begin{itemize}
-        \item The coefficient estimate (221g) is equivalent to the basic linear regression model because propensity score captures the variance from each covariate into a tidy package.
+        \item The coefficient estimate (-221g) is equivalent to the basic linear regression model because propensity score captures the variance from each covariate into a tidy package.
     \end{itemize}
     \item Estimate the p-score using a logit specification without nonlinear terms and interactions. Discuss which covariates appear most predictive of maternal smoking and whether this matches your expectation (please do not use any canned propensity score commands here).
+    \begin{itemize}
+        \item Two covariates with the highest coefficients were mother's marital status (1.233) and alcohol (1.281). On the other side, mother's race (-0.538) and Hispanic origin (-0.418) also had substantial values. Alcohol in particular makes sense as having an outsized impact on smoking status as they are heavily correlated.
+    \end{itemize}
     \item For the p-score estimated using the logit specification, how good is the overlap between the treated and untreated groups?
+    \begin{itemize}
+        \item There seems to be substantial overlap between non-smokers and smokers. However, a decent amount of non-smokers at low p-scores do seem to escape overlap.
+    \end{itemize}
+        \begin{figure}[h]
+        \centering
+        \includegraphics[width=1\linewidth]{Economic Data Analysis//Problem Sets//PS2/p_4c.png}
+    \end{figure}
     \item Now estimate the average treatment effect of maternal smoking on birthweight using OLS regression and controlling for the propensity score. Interpret the treatment effect. State clearly the assumptions under which your estimate has a causal interpretation.
+    \begin{itemize}
+        \item Under the conditional independence assumption where the outcomes are independent on treatment conditioned with the propensity score, smoking mothers see a 220.379g reduction in birthweight compared to nonsmoking mothers.
+    \end{itemize}
     \item Estimate an ATE by the blocking-on-propensity -score method. To do this, divide the data into 10 groups defined by equally sized ranges of the estimated propensity score. Use the blocking estimator from lecture to estimate the ATE of interest.
+    \begin{itemize}
+        \item Using the blocking-on-propensity-score method, we estimate the ATE of interest as -226.367g.
+    \end{itemize}
     \item Estimate the ATE using the Hajek propensity score reweighting (IPW) estimator. You can compute this manually or run a weighted-regression as discussed in the lecture:
     \[\widehat{ATE} = \Bigg(\frac{\sum_i \frac{D_iY_i}{\hat p (X_i)}}{\sum_i \frac{D_i}{\hat p (X_i)}}\Bigg) - \Bigg(\frac{\sum_i \frac{(1 - D_i)Y_i}{1 - \hat p(X_i)}}{\sum_i\frac{(1 - D_i)}{1 - \hat p(X_i)}}\Bigg)\]
+    \begin{itemize}
+        \item We computed this manually and found:\[\widehat{ATE} = ATE_{treated} - ATE_{control} = -233.348g\]
+        This aligns nicely with our original estimate of -221g.
+    \end{itemize}
 \end{enumerate}
+        \begin{table}[h]
+            \centering
+            \caption{ATE Across Methods}
+            \begin{tabular}{lcc}
+            \hline
+            \hline
+            \textbf{Specification} & \textbf{Estimate}\\
+            \hline
+            Linear Probability Model & -220.365 \\
+            Logit & -220.379 \\
+            Blocking On Propensity Score & -226.367 \\
+            Hajek IPW & -223.348 \\
+            \hline
+            \hline
+            \end{tabular}
+        \end{table}
 
 \section{Doubly robust methods}
 \begin{enumerate}[(a)]
     \item Implement p-score matching with regression adjustment (you can use canned commands or implement this procedure manually). Briefly describe the exact steps you used.
+    \begin{itemize}
+        \item We used the \verb|MatchIt| package in R to use nearest neighbor to match on propensity score. After producing the matched dataset, we ran our linear regression of birthweight and found the coefficient to be -223.378g, consistent with our previous findings.
+    \end{itemize}
     \item Implement a double-selection LASSO technique (canned or manual). Use a flexible specification with some polynomials and interaction terms (defining non-linear terms for the use in LASSO may require some thinking).
     \begin{enumerate}[i.]
         \item Describe briefly the estimation steps, even if you are using a canned command. Briefly state and justify the specific options you chose in the canned command.
+        \begin{itemize}
+            \item Using rlassoEffect, we used the covariates from the original regression and added both polynomial and interaction terms for key variables. The first step of LASSO runs a regression of the treatment, smoking status, on all 27 covariates. The second regresses the outcome, birthweight, on the covariates.            
+        \end{itemize}
+        \begin{table}[h]
+            \centering
+            \caption{Double-Selection LASSO}
+            \begin{tabular}{lcccc}
+            \hline
+            \hline
+            & Estimate & Std. Error & t value & Pr($>|t|$) \\
+            \hline
+            Tobacco & $-220.365$ & $4.782$ & $-46.09$ & $<2\times 10^{-16}$ *** \\
+            \hline
+            \hline
+            \end{tabular}
+        \end{table}
         \item How many covariates did you start with? How many covariates are selected in each LASSO step and how many overlap?
+        \begin{itemize}
+            \item We started with 27 covariates. The treatment model selected 26, and the outcome model selected 27. The only excluded variable was polynomial maternal marital status (coded as $dmar^2$).
+        \end{itemize}
     \end{enumerate}
 \end{enumerate}
 
 \section{Note}
-Write a short note comparing your estimates from regression methods, propensity score methods, and double-selection. Comment on whether you think the treatment effect estimates are stable across different methods. Comment on the overarching assumption made across all these methods (restrict discussion to half a page).
+Write a short note comparing your estimates from regression methods, propensity score methods, and double-selection. Comment on whether you think the treatment effect estimates are stable across different methods. Comment on the overarching assumption made across all these methods (restrict discussion to half a page). \\\\
+
+\noindent Across all of the techniques we used, our estimate of the effect of smoking was stable across methods:
+\begin{table}[h]
+    \centering
+    \begin{tabular}{l c c }
+         \hline
+         \textbf{Technique} & \textbf{Estimate} & \textbf{SE}\\
+         \hline
+         Uninteracted Linear Regression & -221.027 & 4.791\\
+         \hline
+         Linear Propensity Score & -221.027 & 4.983 \\
+         \hline
+         ATE Using OLS Controlling on P-Score & -220.379 & 4.997 \\
+         \hline
+         P-Score Matching + Regression Adjustment & -223.378 & 5.857 \\
+         \hline
+         Double Selection LASSO & -220.365 & 4.782 \\
+         \hline   
+    \end{tabular}
+\end{table}
+
+\noindent The key assumption across all of the methods is the conditional independence assumption (aka selection on observables): $Y_i(1). Y_i(0) \perp D_i | X_i$. This assumes no unobserved confounders. However, realistically, there are a variety of social and environmental factors that are not captured in this data that could contribute to heterogeneity. Factors such as income, geography, and genetic predisposition both for smoking and for maternal and fetal outcomes are some potential omitted variables that would help this causal estimate be more robust.
 
 \end{document}

@@ -1,8 +1,17 @@
-## ECON 8803 PS2
-## Rohit Borah
-## February 2026
+---
+title: "RB+AS_8803_PS2"
+format: html
+editor: visual
+---
 
-# Load requisite packages. -----------------------------------------------
+## ECON 8803: PS2
+
+Rohit Borah & Abhisar Singh
+
+February 26, 2026
+
+```{r}
+## Load requisite packages.
 
 library(tidyverse)
 library(readr)
@@ -12,15 +21,22 @@ library(MatchIt)
 library(glmnet)
 library(hdm)
 library(stargazer)
+```
 
-# Import and manipulate data. --------------------------------------------
+```{r}
+## Import data.
 
 df_raw <- read.csv(
   "/Users/bwom/Documents/PhD/Spring 2026/8803 EDA/Problem Sets/PS2/pset2.csv"
 )
+```
 
-# 1a) Fix missing values. ------------------------------------------------
+## 1. Data Cleaning
 
+### 1a. Fix missing values.
+
+```{r}
+# Set encoded missing values to NA.
 df_raw <- df_raw %>%
   mutate(
     across(
@@ -44,6 +60,7 @@ df_raw <- df_raw %>%
     wgain = na_if(wgain, 99)
   )
 
+# Establish set of binary variables.
 binary_vars <- c(
   "anemia",
   "cardiac",
@@ -58,20 +75,33 @@ binary_vars <- c(
   "alcohol"
 )
 
+# Recode binary variables.
 df_raw <- df_raw %>%
   mutate(across(all_of(binary_vars), ~ ifelse(. == 1, 1, 0)))
 
-# str(df) # data validation test
+# str(df) # data validation test (run if needed)
+```
 
-# 1b) Create analysis dataset. --------------------------------------------------
+### 1b. Produce an analysis dataset.
 
+Produce an analysis dataset that drops any observation with missing values and verify it has 114,610 observations. Drop $\verb|stresfip|, \verb|birmon|$, and $\verb|weekday|$.
+
+```{r}
+# Remove missing values and unnecessary variables.
 df <- df_raw %>%
   select(-stresfip, -birmon, -weekday) %>%
   drop_na()
+```
 
-# 1c_cnt.) Continuous Variables Summary Table-----------------------------
+### 1c. Produce summary statistics tables.
 
-## Summary Table 1: Continuous Variables
+Describe some of the key variables in the final analysis data set. A good summary table generally includes mean, standard deviation, minimum and maximum. Pay attention to how some variables are measured (continuously, categorically, etc.).
+
+Continuous Variables:
+
+```{r}
+# Summary Table 1: Continuous
+
 # Variables for table 1
 t1c_cnt_vars <- c(
   "dmage",
@@ -149,10 +179,13 @@ t_1c_cnt <-
     table.width = pct(100)
   )
 
-# t_1c_cnt
+t_1c_cnt
+```
 
-# 1c_cat Categorical Variables Summary Table------------------------------
+Categorical Variables:
 
+```{r}
+# Establish variables
 t1c_cat_vars <- c(
   "csex1",
   "dmar1",
@@ -172,6 +205,7 @@ t1c_cat_vars <- c(
   "alcohol"
 )
 
+# Recode categorical variables where necessary.
 df <- df %>%
   mutate(dplural1 = ifelse(dplural > 1, 1, 0))
 df <- df %>%
@@ -183,6 +217,7 @@ df <- df %>%
 df <- df %>%
   mutate(orfath1 = ifelse(orfath %in% c(1, 2, 3, 4, 5), 1, 0))
 
+# Create table
 df_1c_cat <- data.frame(
   Variable = c(
     "Female Children",
@@ -208,8 +243,6 @@ df_1c_cat <- data.frame(
   })
 )
 
-# df_1c_cat
-
 # Format with gt
 t_1c_cat <-
   df_1c_cat %>%
@@ -230,9 +263,11 @@ t_1c_cat <-
   )
 
 t_1c_cat
+```
 
-# 1d) Histogram of birthweight. ------------------------------------------
+### 1d. Histogram of birthweight variable.
 
+```{r}
 p_1d <- ggplot(df, aes(x = dbrwt)) +
   geom_histogram(bins = 30, fill = "#003057", color = "white") +
   geom_density() +
@@ -247,15 +282,23 @@ p_1d <- ggplot(df, aes(x = dbrwt)) +
     axis.title.y = element_blank()
   )
 
-# p_1d
+p_1d
+```
 
-# 2a) Difference in birthweight by tobacco users vs non-users. -----------
+## Preliminary Analysis
 
+### 2a. Mean ∆ Birthweight by Smoking Status
+
+```{r}
+# Build statistics table 
 df_2a <- df %>%
   group_by(tobacco) %>%
-  summarize(n = n(), mean_brwt = mean(dbrwt), sd_brwt = sd(dbrwt)) %>%
+  summarize(n = n(), 
+            mean_brwt = mean(dbrwt), 
+            sd_brwt = sd(dbrwt)) %>%
   mutate(category = ifelse(tobacco == 1, "Smoker", "Non-Smoker"), .before = n)
 
+# Format with gt
 t_2a <- df_2a %>%
   gt() %>%
   tab_header(
@@ -279,9 +322,12 @@ t_2a <- df_2a %>%
   )
 
 t_2a
+```
 
-# 2b Balance table for causality. ----------------------------------------
+### 2b. Balance Table
 
+```{r}
+# Build analysis table.
 df_2b <- df %>%
   group_by(tobacco) %>%
   summarise(
@@ -290,7 +336,7 @@ df_2b <- df %>%
     mean_age = mean(dmage, na.rm = TRUE),
     mean_education = mean(dmeduc, na.rm = TRUE),
     pct_married = mean(dmar == 1, na.rm = TRUE) * 100,
-    pct_black = mean(mrace3 == 2, na.rm = TRUE) * 100, # adjust category as needed
+    pct_black = mean(mrace3 == 2, na.rm = TRUE) * 100, 
     mean_prenatal_visits = mean(nprevist, na.rm = TRUE),
     pct_hypertension = mean(phyper == 1, na.rm = TRUE) * 100,
     pct_diabetes = mean(diabetes == 1, na.rm = TRUE) * 100
@@ -300,6 +346,7 @@ df_2b <- df %>%
     .before = n
   )
 
+# Reformat table using pivot_longer.
 df_2b_melt <- df_2b %>%
   select(-tobacco) %>%
   pivot_longer(
@@ -309,6 +356,7 @@ df_2b_melt <- df_2b %>%
   ) %>%
   pivot_wider(names_from = tobacco_status, values_from = Value)
 
+# Format output table using gt.
 t_2b <- df_2b_melt %>%
   gt() %>%
   tab_header(
@@ -328,9 +376,13 @@ t_2b <- df_2b_melt %>%
     columns = c(Smoker, `Non-smoker`)
   )
 t_2b
+```
 
-# 3a Basic Linear Regression. --------------------------------------------
+## 3. Regression Adjustment
 
+### 3a. Basic model to estimate smoking impact
+
+```{r}
 # Control variables as reference
 controls <- c(
   "dmage",
@@ -394,8 +446,11 @@ m_3a <- lm(
 summary(m_3a)
 
 # stargazer(m_3a)
+```
 
-# 3b. Adding in bad controls. --------------------------------------------
+### 3b. Adding in Bad Controls
+
+```{r}
 
 m_3b <- lm(
   dbrwt ~ tobacco +
@@ -426,8 +481,11 @@ m_3b <- lm(
 
 summary(m_3b)
 
+```
 
-# 3c. Add in cigar6 to m_3a. ---------------------------------------------
+### 3c. Adding in cigar6 to the 3a Model.
+
+```{r}
 m_3c <- lm(
   dbrwt ~ tobacco +
     dmage +
@@ -453,13 +511,13 @@ m_3c <- lm(
 )
 
 summary(m_3c)
+```
 
+### 3d. Interacting smoking status with diabetes.
 
-# 3d. Interact smoking status with diabetes. -----------------------------
-
+```{r}
 m_3d <- lm(
-  dbrwt ~ tobacco *
-    diabetes +
+  dbrwt ~ tobacco * diabetes +
     dmage +
     dmeduc +
     mrace3 +
@@ -482,10 +540,11 @@ m_3d <- lm(
 )
 
 summary(m_3d)
+```
 
+### 3e. Oaxaca-Blinder
 
-# 3e. Oaxaca-Blinder -----------------------------------------------------
-
+```{r}
 m_3e <- lm(
   dbrwt ~ tobacco *
     (dmage +
@@ -517,10 +576,15 @@ df_3e_nonsmoking <- df %>%
 pred_smoking <- predict(m_3e, newdata = df_3e_smoking)
 pred_nonsmoking <- predict(m_3e, newdata = df_3e_nonsmoking)
 
-ate <- mean(pred_smoking) - mean(pred_nonsmoking)
+ate_3e <- mean(pred_smoking) - mean(pred_nonsmoking) # = -240.478
+```
 
-# 4a. LPM for PS ---------------------------------------------------------
+## 4. Propensity Score Methods
 
+### 4a. LPM to Estimate Propensity Score
+
+```{r}
+# Build linear model
 m_4a_ps <- lm(
   tobacco ~ dmage +
     dmeduc +
@@ -543,17 +607,22 @@ m_4a_ps <- lm(
   data = df
 )
 
+# Add propensity score to working dataset
 df$p_score <- predict(m_4a_ps)
 
-hist(df$p_score) # to see distribution of p-scores
+# Quick hist to see distribution of p-scores
+hist(df$p_score) 
 
+# OLS Regression of Birthweight on Smoking Status
+# using p-score
 m_4a_ols <- lm(dbrwt ~ tobacco + p_score, data = df)
 
 summary(m_4a_ols)
+```
 
+### 4b. Logit to Estimate Propensity Score
 
-# 4b. Logit P-Score ------------------------------------------------------
-
+```{r}
 # Use glm to run a logit specification for p-score
 m_4b_logit <- glm(
   tobacco ~ dmage +
@@ -581,34 +650,44 @@ m_4b_logit <- glm(
 summary(m_4b_logit)
 
 # Add logit propensity score to working dataset
-df$pscore_logit <- predict(m_4b_logit, newdata = df, type = "response")
+df$pscore_logit <- predict(m_4b_logit, 
+                           newdata = df, 
+                           type = "response")
 
-# 4c. P-Score Overlap Plot -----------------------------------------------
+```
 
+### 4c. Logit Specification Overlap
+
+```{r}
 # Visualize p-score overlaps using density plots.
 p_4c <-
   ggplot(df, aes(x = pscore_logit, fill = factor(tobacco))) +
   geom_density(alpha = 0.5) +
-  labs(title = "4c. Propensity Score Overlap Plot", fill = "Smoking Status") +
+  labs(title = "4c. Propensity Score Overlap Plot", 
+       fill = "Smoking Status") +
   theme_fivethirtyeight() +
-  theme(legend.position = "top", legend.title = element_text(face = "bold"))
+  theme(legend.position = "top", 
+        legend.title = element_text(face = "bold"))
 
-# p_4c
+p_4c
+```
 
-# 4d. ATE of Maternal Smoking on Birthweight Using OLS Controlling for P-Score ----
+### 4d. ATE Using OLS Controlling for Propensity Score
 
+```{r}
 m_4d <- lm(dbrwt ~ tobacco + pscore_logit, data = df)
 
 summary(m_4d)
+```
 
+### 4e. ATE Using Blocking-On-Propensity-Score
 
-# 4e. Estimate ATE binned by propensity score. ---------------------------
-
+```{r}
+# Establish 10 bins by percentile
 df_4e <- df %>%
   mutate(bin_pscore = ntile(pscore_logit, 10))
 
-table(df_4e$bin_pscore, df_4e$tobacco)
-
+# Calculate ∆ mean by bin
 df_4e_block <- df_4e %>%
   group_by(bin_pscore) %>%
   summarize(
@@ -616,10 +695,15 @@ df_4e_block <- df_4e %>%
     mean_diff = mean(dbrwt[tobacco == 1]) - mean(dbrwt[tobacco == 0])
   )
 
+# Blocking estimator for ATE of interest
 ate_block <- sum(df_4e_block$mean_diff * df_4e_block$n / sum(df_4e_block$n))
 
-# 4f. Hajek P-Score Weighting --------------------------------------------
+ate_block #-226.367
+```
 
+### 4f. ATE Using Hajek (IPW)
+
+```{r}
 # Calculate Hajek IPW estimator manually
 ate_treated <- sum(df$tobacco * df$dbrwt / df$pscore_logit) /
   sum(df$tobacco / df$pscore_logit)
@@ -630,10 +714,13 @@ ate_control <- sum((1 - df$tobacco) * df$dbrwt / (1 - df$pscore_logit)) /
 ate_ipw <- ate_treated - ate_control
 
 ate_ipw # -223.348g
+```
 
+## 5. Doubly Robust Methods
 
-# 5a. P-Score Matching + Reg Adj -----------------------------------------
+### 5a. P-Score Matching with Regression Adjustment
 
+```{r}
 # Perform propensity score matching
 matched <- matchit(
   tobacco ~ dmage +
@@ -690,12 +777,11 @@ matched_reg <- lm(
 )
 
 summary(matched_reg)
+```
 
+### 5b. Double-Selection LASSO
 
-# 5b. Double-Selection LASSO -----------------------------------------------------------------
-
-## Create flexible spec using polynomials and interaction terms.
-
+```{r}
 # Create double-selection lasso.
 m_5b_ds_lasso <- rlassoEffect(
   x = model.matrix(
@@ -733,3 +819,4 @@ m_5b_ds_lasso <- rlassoEffect(
 )
 
 summary(m_5b_ds_lasso)
+```
