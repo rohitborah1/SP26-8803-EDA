@@ -358,13 +358,7 @@ excluded <- c(
   "dgestat",
   "phyper",
   "preterm",
-  "pre4000",
-  "anemia",
-  "cardiac",
-  "lung",
-  "diabetes",
-  "herpes",
-  "chyper"
+  "pre4000"
 )
 
 # Linear model

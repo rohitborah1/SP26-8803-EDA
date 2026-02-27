@@ -8,7 +8,7 @@ editor: visual
 
 Rohit Borah & Abhisar Singh
 
-February 26, 2026
+February 27, 2026
 
 ```{r}
 ## Load requisite packages.
@@ -102,7 +102,7 @@ Continuous Variables:
 ```{r}
 # Summary Table 1: Continuous
 
-# Variables for table 1
+# Establish variables
 t1c_cnt_vars <- c(
   "dmage",
   "dmeduc",
@@ -438,7 +438,7 @@ m_3a <- lm(
     nprevist +
     adequacy +
     alcohol +
-    drink5 +
+    drink5, +
     csex,
   data = df
 )
@@ -451,7 +451,7 @@ summary(m_3a)
 ### 3b. Adding in Bad Controls
 
 ```{r}
-
+# linear model + bad controls
 m_3b <- lm(
   dbrwt ~ tobacco +
     dmage +
@@ -486,6 +486,7 @@ summary(m_3b)
 ### 3c. Adding in cigar6 to the 3a Model.
 
 ```{r}
+# original linear model + cigar6
 m_3c <- lm(
   dbrwt ~ tobacco +
     dmage +
@@ -516,6 +517,7 @@ summary(m_3c)
 ### 3d. Interacting smoking status with diabetes.
 
 ```{r}
+# linear model interacting tobacco * diabetes
 m_3d <- lm(
   dbrwt ~ tobacco * diabetes +
     dmage +
@@ -545,6 +547,9 @@ summary(m_3d)
 ### 3e. Oaxaca-Blinder
 
 ```{r}
+# Oaxaca-Blinder: linear model interacting tobacco with 
+# all covariates
+
 m_3e <- lm(
   dbrwt ~ tobacco *
     (dmage +
@@ -567,15 +572,18 @@ m_3e <- lm(
   data = df
 )
 
+# Create new tables filtered by smoking status
 df_3e_smoking <- df %>%
   filter(tobacco == 1)
 
 df_3e_nonsmoking <- df %>%
   filter(tobacco == 0)
 
+# Predicted birthweights by smoking status
 pred_smoking <- predict(m_3e, newdata = df_3e_smoking)
 pred_nonsmoking <- predict(m_3e, newdata = df_3e_nonsmoking)
 
+# ATE: ∆ means
 ate_3e <- mean(pred_smoking) - mean(pred_nonsmoking) # = -240.478
 ```
 
@@ -675,6 +683,7 @@ p_4c
 ### 4d. ATE Using OLS Controlling for Propensity Score
 
 ```{r}
+# linear model using logit pscore
 m_4d <- lm(dbrwt ~ tobacco + pscore_logit, data = df)
 
 summary(m_4d)
