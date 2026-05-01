@@ -1,0 +1,901 @@
+---
+title: "8803 Replication QMD"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## ECON 8803: Replication Exercise
+
+Ping Yang & Rohit Borah \|\| May 2026
+
+```{r}
+#| message: false
+#| warning: false
+# Load requisite libraries
+
+library(tidyverse)
+library(haven)
+library(gt)
+library(ggthemes)
+library(sf)
+library(tigris)
+options(tigris_use_cache = TRUE)
+library(did)
+library(patchwork)
+```
+
+## 1. Pre-Analysis
+
+### 1.2 Main Datasets
+
+```{r}
+# Import data
+df_s17 <- read_dta("~/Desktop/PhD/Spring 2026/8803 - Economic Data Analysis/Replication Exercise/Data/CBC_Shale_Combined_Characteristics_17_5_Panel.dta")
+
+df_w17 <- read_dta("~/Desktop/PhD/Spring 2026/8803 - Economic Data Analysis/Replication Exercise/Data/CBC_Wind_Combined_Characteristics_17_5_Panel.dta")
+
+```
+
+### 1.3 Descriptive Statistics
+
+```{r}
+# Pivot longer to build analysis dataset
+
+bird_long <- df_s17 %>%
+  select(
+    # Winsorized counts
+    num_tot_w, num_grassland_w, num_woodland_w, num_wetland_w,
+    num_otherhabitat_w, num_urban_w, num_nonurban_w,
+    num_resident_w, num_shortmigration_w, num_longermigration_w,
+    # Non-winsorized counts
+    num_tot, num_grassland, num_woodland, num_wetland,
+    num_otherhabitat, num_urban, num_nonurban,
+    num_resident, num_shortmigration, num_longermigration,
+    # Species counts (non-winsorized)
+    spec_tot, spec_grassland, spec_woodland, spec_wetland,
+    spec_otherhabitat, spec_urban, spec_nonurban,
+    spec_resident, spec_shortmigration, spec_longermigration
+  ) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "value") %>%
+  mutate(
+    Panel = case_when(
+      str_ends(variable, "_w")      ~ "wins",
+      str_starts(variable, "num_")  ~ "raw",
+      str_starts(variable, "spec_") ~ "spec"
+    ),
+    Label = case_when(
+      str_detect(variable, "tot")            ~ "Total",
+      str_detect(variable, "grassland")      ~ "Grassland/Shrubland",
+      str_detect(variable, "woodland")       ~ "Woodland",
+      str_detect(variable, "wetland")        ~ "Wetland",
+      str_detect(variable, "otherhabitat")   ~ "Other Habitat",
+      str_detect(variable, "nonurban")       ~ "Non-Urban",
+      str_detect(variable, "urban")          ~ "Urban",
+      str_detect(variable, "resident")       ~ "Resident",
+      str_detect(variable, "shortmigration") ~ "Short/Irruptive Migrants",
+      str_detect(variable, "longermigration")~ "Moderate/Long Migrants"
+    ),
+    Label = factor(Label, levels = c(
+      "Grassland/Shrubland", "Woodland", "Wetland",
+      "Other Habitat", "Urban", "Non-Urban",
+      "Resident", "Short/Irruptive Migrants", "Moderate/Long Migrants",
+      "Total"
+    )),
+    Panel = factor(Panel, levels = c("wins", "raw", "spec"))
+  )
+
+```
+
+```{r}
+#| echo: false
+# Use gt to create output table of summary statistics
+
+t_1.3 <- bird_long %>%
+  group_by(Panel, Label) %>%
+  summarise(
+    Mean = mean(value, na.rm = TRUE),
+    SD   = sd(value,   na.rm = TRUE),
+    Max  = max(value,  na.rm = TRUE), # intentionally excluding min
+    .groups = "drop"
+  ) %>%
+  pivot_wider(
+    id_cols     = Label,
+    names_from  = Panel,
+    values_from = c(Mean, SD, Max),
+    names_vary  = "slowest",
+    names_glue  = "{Panel}_{.value}"
+  ) %>%
+  arrange(Label) %>%
+  gt(rowname_col = "Label") %>%
+  tab_spanner(label = "Bird Count (Winsorized)",        columns = starts_with("wins_")) %>%
+  tab_spanner(label = "Bird Count (Non-Winsorized)",    columns = starts_with("raw_")) %>%
+  tab_spanner(label = "Species Count (Non-Winsorized)", columns = starts_with("spec_")) %>%
+  cols_label(
+    wins_Mean = "Mean", wins_SD = "Std. Dev.", wins_Max = "Max",
+    raw_Mean  = "Mean", raw_SD  = "Std. Dev.", raw_Max  = "Max",
+    spec_Mean = "Mean", spec_SD = "Std. Dev.", spec_Max = "Max"
+  ) %>%
+  fmt_number(columns = c(wins_Mean, wins_SD, raw_Mean, raw_SD, spec_Mean, spec_SD), decimals = 1) %>%
+  fmt_number(columns = c(wins_Max, raw_Max, spec_Max), decimals = 0) %>%
+  tab_style(
+    style     = cell_borders(sides = "left", color = "gray50", weight = px(1.5)),
+    locations = cells_body(columns = c(raw_Mean, spec_Mean))
+  ) %>%
+  tab_style(
+    style     = cell_borders(sides = "left", color = "gray50", weight = px(1.5)),
+    locations = cells_column_labels(columns = c(raw_Mean, spec_Mean))
+  ) %>%
+  tab_style(
+    style     = cell_text(weight = "bold"),
+    locations = cells_stub()
+  ) %>%
+  tab_style(
+    style     = cell_text(weight = "bold"),
+    locations = cells_column_spanners()
+  ) %>%
+  tab_header(title = "Descriptive Statistics: Bird Population and Species Counts")
+
+t_1.3
+```
+
+### 1.4 Alternative Figures 2 and 3
+
+```{r}
+
+# Import and maps FIPS data by county
+
+lower48_fips <- fips_codes %>%
+  filter(!state %in% c("AK", "HI", "PR", "GU", "AS", "VI", "MP")) %>%
+  pull(state_code) %>%
+  unique()
+
+counties_sf <- counties(cb = TRUE, resolution = "20m", year = 2020) %>%
+  filter(STATEFP %in% lower48_fips) %>%
+  st_transform(crs = 4326)
+
+```
+
+```{r}
+# Shale by county
+
+# Assign shale circles to counties
+circles_shale_sf <- df_s17 %>%
+  select(circle_id, latitude, longitude) %>%
+  distinct() %>%
+  drop_na(latitude, longitude) %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+
+circle_county_s <- st_join(circles_shale_sf,
+                            counties_sf %>% select(GEOID),
+                            join = st_within) %>%
+  st_drop_geometry()
+
+# Aggregate shale data to county mean across years
+county_shale <- df_s17 %>%
+  left_join(circle_county_s, by = "circle_id") %>%
+  filter(!is.na(GEOID)) %>%
+  group_by(GEOID, year) %>%
+  summarise(
+    avg_birds = mean(num_tot_w,       na.rm = TRUE),
+    avg_spec  = mean(spec_tot,        na.rm = TRUE),
+    avg_wells = mean(shale_wells_num, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(GEOID) %>%
+  summarise(
+    avg_birds = mean(avg_birds, na.rm = TRUE),
+    avg_spec  = mean(avg_spec,  na.rm = TRUE),
+    avg_wells = mean(avg_wells, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+```{r}
+# Wind by county
+
+# Assign wind circles to counties
+circles_wind_sf <- df_w17 %>%
+  select(circle_id, latitude, longitude) %>%
+  distinct() %>%
+  drop_na(latitude, longitude) %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+
+circle_county_w <- st_join(circles_wind_sf,
+                            counties_sf %>% select(GEOID),
+                            join = st_within) %>%
+  st_drop_geometry()
+
+# Aggregate wind data to county mean across years
+county_wind <- df_w17 %>%
+  left_join(circle_county_w, by = "circle_id") %>%
+  filter(!is.na(GEOID)) %>%
+  group_by(GEOID, year) %>%
+  summarise(
+    avg_wind_cap = mean(cumulative_capacity_mw, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(GEOID) %>%
+  summarise(
+    avg_wind_cap = mean(avg_wind_cap, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+```
+
+```{r}
+# Plot data
+
+map_data <- counties_sf %>%
+  left_join(county_shale, by = "GEOID") %>%
+  left_join(county_wind,  by = "GEOID")
+
+p_theme_map <- theme_fivethirtyeight() +
+  theme(
+    legend.position  = "right",
+    legend.direction = "vertical",
+    panel.grid.major = element_blank(),
+    axis.text        = element_blank()
+  )
+
+# Figure 2a: County average bird population (winsorized)
+p_1.4_birds <- ggplot(map_data) +
+  geom_sf(aes(fill = avg_birds), color = NA) +
+  scale_fill_viridis_c(option = "plasma", name = "Count",
+                       na.value = "grey85", labels = scales::comma) +
+  labs(title = "Number of Birds Counted (2000-2020 Average, Winsorized)") +
+  p_theme_map
+
+# Figure 2b: County average species count
+p_1.4_species <- ggplot(map_data) +
+  geom_sf(aes(fill = avg_spec), color = NA) +
+  scale_fill_viridis_c(option = "magma", name = "Species", na.value = "grey85") +
+  labs(title = "Number of Species Reported (2000-2020 Average)") +
+  p_theme_map
+
+# Figure 3a: County average shale wells
+p_1.4_shale <- ggplot(map_data) +
+  geom_sf(aes(fill = avg_wells), color = NA) +
+  scale_fill_viridis_c(option = "plasma", name = "Wells",
+                       na.value = "grey85", labels = scales::comma) +
+  labs(title = "Shale Oil and Gas Wells (2000-2020)") +
+  p_theme_map
+
+# Figure 3b: County average wind turbine capacity
+p_1.4_wind <- ggplot(map_data) +
+  geom_sf(aes(fill = avg_wind_cap), color = NA) +
+  scale_fill_viridis_c(option = "plasma", name = "Capacity (MW)",
+                       na.value = "grey85", labels = scales::comma) +
+  labs(title = "Wind Turbine Projects (2000-2020)") +
+  p_theme_map
+```
+
+```{r}
+# Patchwork the plots together
+
+p_1.4_bs <- p_1.4_birds / p_1.4_species + plot_annotation(caption = "Figure 2 Replication")
+
+p_1.4_energy <- p_1.4_shale / p_1.4_wind + plot_annotation(caption = "Figure 3 Replication")
+
+p_1.4_bs
+
+p_1.4_energy
+```
+
+## 2. Analysis
+
+```{r}
+# Data setup for analysis
+
+outcome <- c(
+  "num_tot_w",
+  "num_grassland_w",
+  "num_woodland_w",
+  "num_wetland_w",
+  "num_otherhabitat_w",
+  "num_urban_w",
+  "num_nonurban_w",
+  "num_resident_w",
+  "num_shortmigration_w",
+  "num_longermigration_w",
+  "spec_tot",
+  "spec_grassland",
+  "spec_woodland",
+  "spec_wetland",
+  "spec_otherhabitat",
+  "spec_urban",
+  "spec_nonurban",
+  "spec_resident",
+  "spec_shortmigration",
+  "spec_longermigration"
+)
+
+X <- c(
+  "total_effort_counters",
+  "Min_temp",
+  "Max_temp",
+  "Max_wind",
+  "Max_snow",
+  "ag_land_share",
+  "past_land_share",
+  "dev_share_narrow"
+)
+
+# Establish key characteristics and labels — variable names match _asinh suffix
+characteristics <- list(
+  total        = list(birds = "num_tot_w_asinh",            spec = "spec_tot_asinh"),
+  grassland    = list(birds = "num_grassland_w_asinh",      spec = "spec_grassland_asinh"),
+  woodland     = list(birds = "num_woodland_w_asinh",       spec = "spec_woodland_asinh"),
+  wetland      = list(birds = "num_wetland_w_asinh",        spec = "spec_wetland_asinh"),
+  otherhabitat = list(birds = "num_otherhabitat_w_asinh",   spec = "spec_otherhabitat_asinh"),
+  urban        = list(birds = "num_urban_w_asinh",          spec = "spec_urban_asinh"),
+  nonurban     = list(birds = "num_nonurban_w_asinh",       spec = "spec_nonurban_asinh"),
+  resident     = list(birds = "num_resident_w_asinh",       spec = "spec_resident_asinh"),
+  shortmig     = list(birds = "num_shortmigration_w_asinh", spec = "spec_shortmigration_asinh"),
+  longermig    = list(birds = "num_longermigration_w_asinh",spec = "spec_longermigration_asinh")
+)
+
+# Human-readable labels matching Figure 4 y-axis order (top → bottom)
+char_labels <- c(
+  total        = "Total",
+  grassland    = "Grassland/Shrubland",
+  woodland     = "Woodland",
+  wetland      = "Wetland",
+  otherhabitat = "Other Habitats",
+  urban        = "Urban",
+  nonurban     = "Non-Urban",
+  resident     = "Non-Migrants",
+  shortmig     = "Short/Irruptive Migrants",
+  longermig    = "Moderate/Long Migrants"
+)
+
+# Factor levels: reversed so ggplot y-axis reads top-to-bottom as in Figure 4
+char_levels <- rev(char_labels)
+
+
+```
+
+```{r}
+# Inverse hyperbolic sine transform for both shale and wind
+
+shale <- df_s17 %>%
+  mutate(
+    across(
+      all_of(outcome),
+      asinh,
+      .names = "{.col}_asinh"
+    )
+  )
+
+shale <- shale %>%
+  group_by(circle_id) %>%
+  mutate(
+    gshale = ifelse(any(cum_shalewells>0, na.rm = TRUE), 
+                    min(year[cum_shalewells>0],na.rm = TRUE),
+                    0)
+  )%>%
+  ungroup()
+
+shale_outcomes <- paste0(outcome, "_asinh")
+
+wind <- df_w17 %>%
+  mutate(
+    across(
+      all_of(outcome),
+      asinh,
+      .names = "{.col}_asinh"
+    )
+  )
+wind <- wind %>%
+  group_by(circle_id) %>%
+  mutate(
+    gwind = ifelse(any(c_num_turbines>0, na.rm = TRUE), 
+                    min(year[c_num_turbines>0],na.rm = TRUE),
+                    0)
+  )%>%
+  ungroup()
+
+wind_outcomes <- paste0(outcome, "_asinh")
+
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+# ATT: Helper Function
+
+run_att <- function(y, g_col, data, label, outcome_type) {
+  fit <- att_gt(
+    yname = y,
+    tname = "year",
+    gname = g_col,
+    idname = "circle_id",
+    xformla = ~ total_effort_counters + Min_temp + Max_temp + Max_wind + Max_snow + ag_land_share + past_land_share + dev_share_narrow,
+    data = data,
+    panel = TRUE,
+    allow_unbalanced_panel = TRUE,
+    clustervars = "circle_id",
+    est_method = "ipw",
+    control_group = "nevertreated",
+    faster_mode = FALSE,
+    bstrap = FALSE
+  )
+
+  agg <- aggte(fit, type = "calendar", na.rm = TRUE)
+  
+  tibble(
+    label        = label,
+    outcome_type = outcome_type,
+    est          = agg$overall.att,
+    se           = agg$overall.se,
+    p_val        = 2 * (1 - pnorm(abs(est / se))),
+    ci90_lo      = est - qnorm(0.95)  * se,
+    ci90_hi      = est + qnorm(0.95)  * se,
+    ci95_lo      = est - qnorm(0.975) * se,
+    ci95_hi      = est + qnorm(0.975) * se
+  )
+}
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+# ATT: Shale
+
+att_shale <- map_dfr(names(characteristics), function(nm) {
+  bind_rows(
+    run_att(characteristics[[nm]]$birds, "gshale", shale, char_labels[[nm]], "Birds Reported"),
+    run_att(characteristics[[nm]]$spec,  "gshale", shale, char_labels[[nm]], "Species Reported")
+  )
+})
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| echo: false
+
+# ATT: Wind
+
+att_wind <- map_dfr(names(characteristics), function(nm) {
+  bind_rows(
+    run_att(characteristics[[nm]]$birds, "gwind", wind, char_labels[[nm]], "Birds Reported"),
+    run_att(characteristics[[nm]]$spec,  "gwind", wind, char_labels[[nm]], "Species Reported")
+  )
+})
+
+```
+
+### 2.2 Figure 4: Effects by Habitat
+
+```{r}
+#| warning: false
+#| echo: false
+# Plot coefficients
+
+# Coefficient plot matching Figure 4 style
+p_theme_2.2 <- function(df, color_fill, panel_label) {
+  df %>%
+    mutate(
+      label        = factor(label, levels = char_levels),
+      outcome_type = factor(outcome_type, levels = c("Birds Reported", "Species Reported"))
+    ) %>%
+    ggplot(aes(y = label, x = est)) +
+    geom_vline(xintercept = 0,
+               linetype = "dashed",
+               linewidth = 0.4) +
+    geom_linerange(
+      aes(xmin = ci95_lo, xmax = ci95_hi),
+      linewidth = 0.5,
+      color = color_fill,
+      alpha = 0.4
+    ) +
+    geom_linerange(aes(xmin = ci90_lo, xmax = ci90_hi),
+                   linewidth = 1.2,
+                   color = color_fill) +
+    geom_point(shape = 18,
+               size = 2.5,
+               color = color_fill) +
+    facet_wrap( ~ outcome_type, scales = "free_x") +
+    labs(title = panel_label, x = "Coefficient Estimate", y = NULL) +
+    theme_bw(base_size = 10) +
+    theme(
+      panel.grid.minor = element_blank(),
+      strip.background = element_blank(),
+      strip.text       = element_text(face = "bold")
+    )
+}
+
+p_2.2_shale <- p_theme_2.2(att_shale, "tomato3", "A. Shale Wells")
+p_2.2_wind <- p_theme_2.2(att_wind, "deepskyblue3", "B. Wind Turbines")
+
+p_2.2 <- p_2.2_shale / p_2.2_wind +
+  plot_annotation(title = "Effects of Shale Well and Wind Turbine Arrival on Bird and Species Counts", subtitle = "Figure 4 Replication", caption = "Ping Yang & Rohit Borah")
+
+p_2.2
+```
+
+### 2.4 Event Study Specification
+
+```{r}
+#| message: false
+#| warning: false
+#| echo: false
+
+# Run att_gt for each of the four groups
+
+es_xformla <- ~ total_effort_counters + Min_temp + Max_temp + Max_wind + Max_snow + ag_land_share + past_land_share + dev_share_narrow
+
+cs_shale_birds <- att_gt(
+  yname                  = "num_tot_w_asinh",
+  tname                  = "year",
+  idname                 = "circle_id",
+  gname                  = "gshale",
+  xformla                = es_xformla,
+  data                   = shale,
+  control_group          = "nevertreated",
+  clustervars            = "circle_id",
+  allow_unbalanced_panel = TRUE,
+  faster_mode            = FALSE,
+  est_method             = "ipw",
+  bstrap                 = FALSE
+)
+
+cs_shale_spec <- att_gt(
+  yname                  = "spec_tot_asinh",
+  tname                  = "year",
+  idname                 = "circle_id",
+  gname                  = "gshale",
+  xformla                = es_xformla,
+  data                   = shale,
+  control_group          = "nevertreated",
+  clustervars            = "circle_id",
+  allow_unbalanced_panel = TRUE,
+  faster_mode            = FALSE,
+  est_method             = "ipw",
+  bstrap                 = FALSE
+)
+
+cs_wind_birds <- att_gt(
+  yname                  = "num_tot_w_asinh",
+  tname                  = "year",
+  idname                 = "circle_id",
+  gname                  = "gwind",
+  xformla                = es_xformla,
+  data                   = wind,
+  control_group          = "nevertreated",
+  clustervars            = "circle_id",
+  allow_unbalanced_panel = TRUE,
+  faster_mode            = FALSE,
+  est_method             = "ipw",
+  bstrap                 = FALSE
+)
+
+cs_wind_spec <- att_gt(
+  yname                  = "spec_tot_asinh",
+  tname                  = "year",
+  idname                 = "circle_id",
+  gname                  = "gwind",
+  xformla                = es_xformla,
+  data                   = wind,
+  control_group          = "nevertreated",
+  clustervars            = "circle_id",
+  allow_unbalanced_panel = TRUE,
+  faster_mode            = FALSE,
+  est_method             = "ipw",
+  bstrap                 = FALSE
+)
+
+```
+
+```{r}
+# Create event study objects
+
+es_shale_birds <- aggte(
+  cs_shale_birds,
+  type = "dynamic",
+  min_e = -5,
+  max_e = 12,
+  na.rm = TRUE
+)
+es_shale_spec  <- aggte(
+  cs_shale_spec,
+  type = "dynamic",
+  min_e = -5,
+  max_e = 12,
+  na.rm = TRUE
+)
+es_wind_birds  <- aggte(
+  cs_wind_birds,
+  type = "dynamic",
+  min_e = -5,
+  max_e = 12,
+  na.rm = TRUE
+)
+es_wind_spec   <- aggte(
+  cs_wind_spec,
+  type = "dynamic",
+  min_e = -5,
+  max_e = 12,
+  na.rm = TRUE
+)
+
+```
+
+```{r}
+# aggte tables for review
+
+aggte_to_df <- function(ag) {
+  tibble(
+    e       = ag$egt,
+    att     = ag$att.egt,
+    se      = ag$se.egt,
+    ci90_lo = att - qnorm(0.95)  * se,
+    ci90_hi = att + qnorm(0.95)  * se,
+    ci95_lo = att - qnorm(0.975) * se,
+    ci95_hi = att + qnorm(0.975) * se
+  )
+}
+
+df_es_shale_birds <- aggte_to_df(es_shale_birds)
+df_es_shale_spec  <- aggte_to_df(es_shale_spec)
+df_es_wind_birds  <- aggte_to_df(es_wind_birds)
+df_es_wind_spec   <- aggte_to_df(es_wind_spec)
+```
+
+```{r}
+# Plot data
+p_theme_es <- function(df, title, color_fill) {
+  ggplot(df, aes(x = e)) +
+    geom_col(aes(y = att),
+             fill = color_fill,
+             alpha = 0.5,
+             width = 0.6) +
+    geom_linerange(
+      aes(ymin = ci95_lo, ymax = ci95_hi),
+      linewidth = 0.5,
+      color = color_fill,
+      alpha = 0.5
+    ) +
+    geom_linerange(aes(ymin = ci90_lo, ymax = ci90_hi),
+                   linewidth = 1.2,
+                   color = color_fill) +
+    geom_point(
+      aes(y = att),
+      shape = 20,
+      size = 2,
+      color = color_fill,
+      fill = "white",
+      stroke = 1
+    ) +
+    geom_hline(yintercept = 0, linewidth = 0.4) +
+    geom_vline(xintercept = 0,
+               linetype = "dashed",
+               linewidth = 0.5) +
+    scale_x_continuous(breaks = seq(-5, 12, 1)) +
+    scale_y_continuous(
+      breaks = scales::breaks_width(0.1),
+      labels = scales::label_number(accuracy = 0.1)
+    ) +
+    labs(x = "Years from First Treatment", y = "ATT Estimate", title = title) +
+    theme_bw(base_size = 10) +
+    theme(panel.grid.minor = element_blank())
+}
+```
+
+```{r}
+# Event Study Plot: Shale Wells
+
+p_2.4_shale_birds <- p_theme_es(df_es_shale_birds, "Number of Birds Reported", "tomato3")
+p_2.4_shale_spec  <- p_theme_es(df_es_shale_spec, "Number of Species Reported", "tomato3")
+p_2.4_shale <- p_2.4_shale_birds + p_2.4_shale_spec +
+  plot_annotation(title = "Effects of Shale Wells on Bird and Species Counts (Dynamic)",
+                  subtitle = "Figure A5 Replication",
+                  caption = "Ping Yang & Rohit Borah")
+
+p_2.4_shale
+```
+
+```{r}
+# Event Study Plot: Wind Turbines
+
+p_2.4_wind_birds <- p_theme_es(df_es_wind_birds, "Number of Birds Reported", "deepskyblue3")
+
+p_2.4_wind_spec <- p_theme_es(df_es_wind_spec, "Number of Species Reported", "deepskyblue3")
+
+p_2.4_wind <- p_2.4_wind_birds + p_2.4_wind_spec +
+  plot_annotation(title = "Effects of Wind Turbines on Bird and Species Counts (Dynamic)",
+                  subtitle = "Figure A6 Replication",
+                  caption = "Ping Yang & Rohit Borah")
+
+p_2.4_wind
+```
+
+## 3. Extension: County-Level Analysis
+
+### 3c. County-Level Event Study
+
+```{r}
+#| message: false
+#| warning: false
+#| echo: false
+
+# Build county-year panel: shale
+# Reuses circle_county_s from Section 1.4 (circle_id → GEOID mapping)
+
+shale_county <- df_s17 %>%
+  left_join(circle_county_s, by = "circle_id") %>%
+  filter(!is.na(GEOID)) %>%
+  mutate(across(all_of(outcome), asinh, .names = "{.col}_asinh")) %>%
+  group_by(GEOID, year) %>%
+  summarise(
+    across(all_of(shale_outcomes), mean, na.rm = TRUE),
+    total_wells = sum(shale_wells_num, na.rm = TRUE),
+    across(all_of(X), mean, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(GEOID) %>%
+  mutate(
+    gshale_county = if_else(
+      any(total_wells > 0, na.rm = TRUE),
+      min(year[total_wells > 0], na.rm = TRUE),
+      0L
+    )
+  ) %>%
+  ungroup() %>%
+  mutate(GEOID_num = as.integer(GEOID))
+
+# Build county-year panel: wind
+# Reuses circle_county_w from Section 1.4 (circle_id → GEOID mapping)
+
+wind_county <- df_w17 %>%
+  left_join(circle_county_w, by = "circle_id") %>%
+  filter(!is.na(GEOID)) %>%
+  mutate(across(all_of(outcome), asinh, .names = "{.col}_asinh")) %>%
+  group_by(GEOID, year) %>%
+  summarise(
+    across(all_of(wind_outcomes), mean, na.rm = TRUE),
+    total_turbines = sum(num_turbines, na.rm = TRUE),
+    across(all_of(X), mean, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(GEOID) %>%
+  mutate(
+    gwind_county = if_else(
+      any(total_turbines > 0, na.rm = TRUE),
+      min(year[total_turbines > 0], na.rm = TRUE),
+      0L
+    )
+  ) %>%
+  ungroup() %>%
+  mutate(GEOID_num = as.integer(GEOID))
+```
+
+```{r}
+#| message: false
+#| warning: false
+#| echo: false
+
+# Run att_gt for each of the four county-level groups
+
+cs_county_shale_birds <- att_gt(
+  yname                  = "num_tot_w_asinh",
+  tname                  = "year",
+  idname                 = "GEOID_num",
+  gname                  = "gshale_county",
+  xformla                = es_xformla,
+  data                   = shale_county,
+  control_group          = "nevertreated",
+  clustervars            = "GEOID_num",
+  est_method             = "ipw",
+  allow_unbalanced_panel = TRUE,
+  bstrap                 = FALSE,
+  faster_mode            = FALSE
+)
+
+cs_county_shale_spec <- att_gt(
+  yname                  = "spec_tot_asinh",
+  tname                  = "year",
+  idname                 = "GEOID_num",
+  gname                  = "gshale_county",
+  xformla                = es_xformla,
+  data                   = shale_county,
+  control_group          = "nevertreated",
+  clustervars            = "GEOID_num",
+  est_method             = "ipw",
+  allow_unbalanced_panel = TRUE,
+  bstrap                 = FALSE,
+  faster_mode            = FALSE
+)
+
+cs_county_wind_birds <- att_gt(
+  yname                  = "num_tot_w_asinh",
+  tname                  = "year",
+  idname                 = "GEOID_num",
+  gname                  = "gwind_county",
+  xformla                = es_xformla,
+  data                   = wind_county,
+  control_group          = "nevertreated",
+  clustervars            = "GEOID_num",
+  est_method             = "ipw",
+  allow_unbalanced_panel = TRUE,
+  bstrap                 = FALSE,
+  faster_mode            = FALSE
+)
+
+cs_county_wind_spec <- att_gt(
+  yname                  = "spec_tot_asinh",
+  tname                  = "year",
+  idname                 = "GEOID_num",
+  gname                  = "gwind_county",
+  xformla                = es_xformla,
+  data                   = wind_county,
+  control_group          = "nevertreated",
+  clustervars            = "GEOID_num",
+  est_method             = "ipw",
+  allow_unbalanced_panel = TRUE,
+  bstrap                 = FALSE,
+  faster_mode            = FALSE
+)
+```
+
+```{r}
+# Aggregate to dynamic event study
+
+es_county_shale_birds <- aggte(cs_county_shale_birds, type = "dynamic", min_e = -5, max_e = 12, na.rm = TRUE)
+es_county_shale_spec  <- aggte(cs_county_shale_spec,  type = "dynamic", min_e = -5, max_e = 12, na.rm = TRUE)
+es_county_wind_birds  <- aggte(cs_county_wind_birds,  type = "dynamic", min_e = -5, max_e = 12, na.rm = TRUE)
+es_county_wind_spec   <- aggte(cs_county_wind_spec,   type = "dynamic", min_e = -5, max_e = 12, na.rm = TRUE)
+```
+
+```{r}
+# Convert to data frames using aggte_to_df helper from Section 2.4
+
+df_es_county_shale_birds <- aggte_to_df(es_county_shale_birds)
+df_es_county_shale_spec  <- aggte_to_df(es_county_shale_spec)
+df_es_county_wind_birds  <- aggte_to_df(es_county_wind_birds)
+df_es_county_wind_spec   <- aggte_to_df(es_county_wind_spec)
+```
+
+```{r}
+# Event Study Plot: County-Level Shale Wells
+
+p_3c_shale_birds <- p_theme_es(df_es_county_shale_birds, "Number of Birds Reported", "tomato3")
+p_3c_shale_spec  <- p_theme_es(df_es_county_shale_spec,  "Number of Species Reported", "tomato3")
+
+p_3c_shale <- p_3c_shale_birds + p_3c_shale_spec +
+  plot_annotation(
+    title    = "County-Level Effects of Shale Wells on Bird and Species Counts (Dynamic)",
+    subtitle = "Figure A5 Replication — County Level",
+    caption  = "Ping Yang & Rohit Borah"
+  )
+```
+
+```{r}
+# Event Study Plot: County-Level Wind Turbines
+
+p_3c_wind_birds <- p_theme_es(df_es_county_wind_birds, "Number of Birds Reported", "deepskyblue3")
+p_3c_wind_spec  <- p_theme_es(df_es_county_wind_spec,  "Number of Species Reported", "deepskyblue3")
+
+p_3c_wind <- p_3c_wind_birds + p_3c_wind_spec +
+  plot_annotation(
+    title    = "County-Level Effects of Wind Turbines on Bird and Species Counts (Dynamic)",
+    subtitle = "Figure A6 Replication — County Level",
+    caption  = "Ping Yang & Rohit Borah"
+  )
+```
+
+```{r}
+p_3c <- p_3c_shale / p_3c_wind + plot_annotation(
+  title = "County-Level Event Study",
+  subtitle = "Extension 3C: County-Level Reproductions of Figures A5 and A6",
+  caption = "Ping Yang & Rohit Borah"
+)
+
+p_3c
+```
