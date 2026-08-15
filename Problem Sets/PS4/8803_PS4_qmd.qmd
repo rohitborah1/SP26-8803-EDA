@@ -1,0 +1,396 @@
+---
+title: "8803_PS4_qmd"
+format: html
+editor: visual
+---
+
+## ECON 8803: PS4
+
+Rohit Borah & Eli Miller
+
+April 4, 2026
+
+```{r}
+## Load requisite packages.
+
+library(readr)
+library(tidyverse)
+library(ggthemes)
+library(panelView)
+library(fixest)
+library(did)
+library(didimputation)
+```
+
+```{r}
+## Import data.
+
+# Original dataset
+df_pset4 <- read_csv("pset4.csv")
+
+# Working dataset
+df <- df_pset4
+
+# str(df)
+```
+
+## 1. Data Summary and Pre-Analysis
+
+### 1a. Summarize the data.
+
+Start by summarizing the data (Hint: package panelview in Stata and R can be helpful in both parts: is the panel balanced (aka complete)? Visualize the timing of primary belt laws. Are there any reversals of primary belt laws? Are there never-treated states?
+
+```{r}
+## 1a. Summarize the data
+
+# Balanced panel counts
+df %>% count(state)
+df %>% count(year)
+
+# Visualize treatment timing for primary belt law
+panelview(formula = fatalities ~ primary, 
+          data = df,
+          index = c("state", "year"),
+          type = "treat",
+          main = "Timing of Primary Seatbelt Laws",
+          xlab = "Year", 
+          ylab = "State")
+
+# Policy Reversals Check
+df %>%                                                 
+  arrange(state, year) %>%
+  group_by(state) %>%
+  summarise(reversed = any(diff(primary) < 0)) %>%
+  filter(reversed)
+
+# Never-Treated Check
+df %>%
+  group_by(state) %>%
+  summarise(ever_treated = any(primary == 1)) %>%
+  filter(!ever_treated)
+```
+
+### 1b. Visualize timing of primary and secondary belt laws.
+
+Note that the data also includes information on the secondary seat belt laws. Use panelview to visualize the timing of primary and secondary belt laws in the data. What do you observe?
+
+```{r}
+# 1b. Visualize timing of primary and secondary belt laws.
+
+# Setup treatment variables
+## 0 = no law, 1 = secondary only, 2 = primary
+df <- df %>%
+  mutate(belt_law = case_when(
+    primary == 1 ~ 2, 
+    secondary == 1 ~ 1,
+    TRUE ~ 0))
+
+panelview(
+  fatalities ~ belt_law,
+  data = df,
+  index = c("state", "year"),
+  type = "treat",
+  treat.type = "discrete",
+  main = "Timing of Primary and Secondary Seatbelt Laws",
+  xlab = "Year",
+  ylab = "State",
+  legend.labs = c("No Law", "Secondary Only", "Primary")
+)
+```
+
+### 1c. Log Traffic Fatalities
+
+Define the outcome as log traffic fatalities per capita. What would be problematic if we measured the outcome as just the number of traffic fatalities?
+
+```{r}
+# 1c. Log traffic fatalities
+
+df$log_fatalities_pc <- log(df$fatalities / df$population)
+```
+
+### 1d. Parallel Trends Assumption
+
+State the parallel trends assumption in words (try to be as precise and concise as you can and please avoid simply translating the math expression in words).
+
+```{r}
+#1d. No code required.
+```
+
+### 1e. Plot raw outcome data.
+
+Plot raw outcome data in a way that may be helpful for later difference in-differences (DiD) analysis (panelview may come in handy here too).
+
+From this graph, can you say anything about the plausibility of the parallel trends and no anticipation assumptions as well as the effects of primary belt laws?
+
+```{r}
+# 1e. Plot raw outcome data
+
+panelview(log_fatalities_pc ~ primary,
+          data = df,
+          index = c("state", "year"),
+          type = "outcome",
+          main = "Log Traffic Fatalities Per Capita by Treatment Status",
+          xlab = "Year", ylab = "Log Fatalities Per Capita",
+          color = c("gray70", "steelblue", "tomato"))
+```
+
+### 1f. Test for anticipation effects.
+
+Now, conduct a test for anticipation effects. One way of doing this is to run a two way fixed effects regression on the untreated data only. The coefficients of interest will be time period indicators leading up to the treatment.
+
+Show these coefficients along with the appropriate standard errors in a table or as a figure. What do you observe?
+
+```{r}
+#1f. Anticipation effects
+
+# First treatment year for each treated state
+treat_years <- df %>%
+  filter(primary == 1) %>%
+  group_by(state) %>%
+  summarize(treat_year = min(year))
+
+## Note to GD: written with AI assistance below
+
+# Untreated observations only; compute time relative to treatment
+df_pre <- df %>%
+  filter(primary == 0) %>%
+  left_join(treat_years, by = "state") %>%
+  mutate(rel_year = year - treat_year)  # NA for never-treated states
+
+# TWFE with lead indicators; t-1 is reference period
+m_anticipation <- feols(log_fatalities_pc ~ i(rel_year, ref = -1) | state + year,
+                          data = df_pre,
+                          cluster = ~state)
+
+summary(m_anticipation)
+
+iplot(m_anticipation,
+      main = "Pre-Treatment Coefficients: Test for Anticipation",
+      xlab = "Years Relative to Treatment",
+      ylab = "Coefficient (ref: t-1)")
+
+
+```
+
+## 2. DID Analysis
+
+You may use canned commands to implement DID or code it manually. For the event study specifications, report the estimates visually along with 95% confidence bands.
+
+### 2a. Static TWFE
+
+Use the static Two Way Fixed Effects (TWFE) to estimate the treatment effect of primary belt law. Interpret the treatment effect.
+
+```{r}
+# 2a. Static TWFE
+
+# Fixed Effects OLS
+m_twfe <- feols(log_fatalities_pc ~ primary | state + year,
+                data = df,
+                cluster = ~state)
+
+summary(m_twfe)
+
+# Fatalities prevented: 
+## counterfactual = observed * exp(coef), prevented = observed * (exp(coef) - 1)
+## note to GD: below analysis was written by Claude
+coef_twfe <- -0.086313
+multiplier <- exp(-coef_twfe) - 1  # exp(0.086) - 1
+
+df_counterfactual <- df %>%
+  filter(primary == 1) %>%
+  summarize(
+    n_obs            = n(),
+    total_observed   = sum(fatalities),
+    total_prevented  = sum(fatalities * multiplier),
+    avg_prevented    = mean(fatalities * multiplier)
+  )
+```
+
+### 2b. Three examples of TWFE
+
+Refer to your summary from \\verb\|panelview\| for part 1(a), and list any three examples of $2 \times 2$ comparisons that the TWFE specification you estimated above performs. Briefly state which comparisons could be problematic?
+
+```{r}
+# 2b. No code.
+```
+
+### 2c. CS group-time avg estimator
+
+Use Callaway and Sant'Anna (2021) group-time average estimator to estimate the event study specification. Use the 'never-treated group' as the control group for the treated units. What is the overall ATT estimate? Are the estimates different if you also use the 'not-yet-treated' group as controls?
+
+```{r}
+#2c. Callaway-Sant'Anna
+
+df_cs <- df %>%
+  mutate(state_id = as.integer(factor(state))) %>%
+  left_join(treat_years, by = "state") %>%
+  mutate(treat_year = replace_na(treat_year, 0))
+
+# Never-treated as control
+cs_never <- att_gt(yname = "log_fatalities_pc",
+                   tname = "year",
+                   idname = "state_id",
+                   gname = "treat_year",
+                   control_group = "nevertreated",
+                   data = df_cs,
+                   clustervars = "state_id")
+
+summary(aggte(cs_never, type = "simple"))
+
+ggdid(aggte(cs_never, type = "dynamic"),
+      title = "CS Event Study: Never-Treated Control")
+
+# Not-yet-treated as control
+cs_notyet <- att_gt(yname = "log_fatalities_pc",
+                    tname = "year",
+                    idname = "state_id",
+                    gname = "treat_year",
+                    control_group = "notyettreated",
+                    data = df_cs,
+                    clustervars = "state_id")
+
+summary(aggte(cs_notyet, type = "simple"))
+
+ggdid(aggte(cs_notyet, type = "dynamic"),
+      title = "CS Event Study: Not-Yet-Treated Control")
+```
+
+### 2d. BJS Imputation Estimator for Event-Study
+
+Implement the Borusyak, Jaravel, and Spiess (2022) (BJS) imputation estimator for the event-study specification. How does the event-study from BJS compare with the event-study from Callaway and Sant'Anna estimator?
+
+```{r}
+#2d. BJS
+
+m_bjs <- did_imputation(data = df_cs,
+                        yname = "log_fatalities_pc",
+                        gname = "treat_year",
+                        tname = "year",
+                        idname = "state_id",
+                        horizon = TRUE,
+                        pretrends = -22:-1)
+
+m_bjs %>%
+  mutate(term = as.numeric(term)) %>%
+  ggplot(aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
+  geom_point() +
+  geom_errorbar(width = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = -0.5, linetype = "dashed", color = "tomato") +
+  labs(title = "BJS Imputation Estimator: Event Study",
+       x = "Years Relative to Treatment",
+       y = "Coefficient")
+```
+
+## 3. Robustness Checks and Placebo Tests
+
+Oftentimes authors conduct several robustness checks and placebo tests to check the sensitivity of the baseline results to violations of key assumptions. We will conduct a few such tests too:
+
+### 3a. Risk of a state having both primary and secondary laws.
+
+Notice that several states have both primary and secondary belt laws. Briefly describe how this could be a potential concern to your DID analysis above (hint: reflect back to your finding in part 1.b).
+
+```{r}
+# 3a. No code.
+```
+
+### 3b. ES by controlling for linear trends
+
+Estimate the event-study by controlling for state-specific linear trends in the BJS imputation estimator. Do the results seem robust?
+
+```{r}
+# 3b. ES with linear controls
+
+m_bjs_trends <- did_imputation(data = df_cs,
+                               yname = "log_fatalities_pc",
+                               gname = "treat_year",
+                               tname = "year",
+                               idname = "state_id",
+                               horizon = TRUE,
+                               pretrends = -10:-1,
+                               first_stage = ~ 0 | state_id + year + state_id[year])
+
+m_bjs_trends %>%
+  mutate(term = as.numeric(term)) %>%
+  ggplot(aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
+  geom_point() +
+  geom_errorbar(width = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = -0.5, linetype = "dashed", color = "tomato") +
+  labs(title = "BJS Event Study: State-Specific Linear Trends",
+       x = "Years Relative to Treatment",
+       y = "Coefficient") +
+  theme_fivethirtyeight()
+```
+
+### 3c. ES with time-varying control
+
+Estimate the event-study with time-varying control for vehicle-miles traveled per capita (use the BJS estimator). Do the results seem robust? What could be a potential concern with this control?
+
+```{r}
+#3c. ES with time-varying control.
+
+## Note to GD- this was written primarily by AI as we were struggling to figure out the approach.
+
+df_cs <- df_cs %>%
+  mutate(vmt_pc = totalvmt / population)
+
+m_bjs_vmt <- did_imputation(data = df_cs,
+                             yname = "log_fatalities_pc",
+                             gname = "treat_year",
+                             tname = "year",
+                             idname = "state_id",
+                             horizon = TRUE,
+                             pretrends = -10:-1,
+                             first_stage = ~ vmt_pc | state_id + year)
+
+m_bjs_vmt %>%
+  mutate(term = as.numeric(term)) %>%
+  ggplot(aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
+  geom_point() +
+  geom_errorbar(width = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = -0.5, linetype = "dashed", color = "tomato") +
+  labs(title = "BJS Event Study: VMT Per Capita Control",
+       x = "Years Relative to Treatment",
+       y = "Coefficient") +
+  theme_fivethirtyeight()
+```
+
+### 3d. Parallel trends conditional on college graduate rate
+
+Consider parallel trends conditional on the percent of college graduates in 1981 (a time-invariant control). You may use the BJS or CS estimator. Is the event study different than the one you obtained under unconditional parallel trends?
+
+```{r}
+# 3d. Conditional parallel trends
+
+# Extract 1981 college grad rate per state (time-invariant control)
+college_1981 <- df %>%
+  filter(year == 1981) %>%
+  select(state, college_1981 = college)
+
+df_cs <- df_cs %>%
+  left_join(college_1981, by = "state")
+
+# BJS with college_1981 * year
+m_bjs_college <- did_imputation(data = df_cs,
+                                yname = "log_fatalities_pc",
+                                gname = "treat_year",
+                                tname = "year",
+                                idname = "state_id",
+                                horizon = TRUE,
+                                pretrends = -10:-1,
+                                first_stage = ~ i(year, college_1981) | state_id + year)
+
+m_bjs_college %>%
+  mutate(term = as.numeric(term)) %>%
+  ggplot(aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
+  geom_point() +
+  geom_errorbar(width = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = -0.5, linetype = "dashed", color = "tomato") +
+  labs(title = "BJS Event Study: Conditional on 1981 College Grad Rate",
+       x = "Years Relative to Treatment",
+       y = "Coefficient") +
+  theme_fivethirtyeight()
+```

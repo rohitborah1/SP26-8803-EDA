@@ -1,0 +1,189 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{caption}
+\usepackage{enumerate}
+\usepackage{dcolumn}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{tabularx}
+
+\title{ECON 8803: PS4}
+\author{Rohit Borah \& Eli Miller}
+
+\begin{document}
+\maketitle
+
+\begin{enumerate}
+    \item Data summary and pre-analysis:
+    \begin{enumerate}[(a)]
+        \item Start by summarizing the data (Hint: package \verb|panelview| in Stata and R can be helpful in both parts: is the panel balanced (aka complete)? Visualize the timing of primary belt laws. Are there any reversals of primary belt laws? Are there never-treated states?
+        \begin{itemize}
+            \item The panel is balanced: there are complete data for each state (n=48) and each year (n=23). No states reversed a primary seatbelt law at any point in the sample, but 30 states fall into the never-treated group having never passed a primary seatbelt law.
+            \begin{figure}[h]
+                \centering
+                \includegraphics[width=1.1\linewidth]{Economic Data Analysis//Problem Sets//PS4/p_1a.png}
+            \end{figure}
+        \end{itemize}
+        \item Note that the data also includes information on the secondary seat belt laws. Use \verb|panelview| to visualize the timing of primary and secondary belt laws in the data. What do you observe?
+        \begin{itemize}
+            \item The first thing that jumps out to me is New Hampshire, which is famously libertarian, was the only state that never enacted even a secondary seatbelt law. The modal outcome was states only enacting a secondary law (n=29).
+            \begin{table}[h]
+            \centering
+            \caption*{}
+            \begin{tabular}{lc}
+            \hline
+            \hline
+            \textbf{Category} & \textbf{Count} \\
+            \hline
+            Primary Only & 7\\
+            Secondary Only & 29 \\
+            Secondary First, Primary Later & 11\\
+            Never Treated & 1\\
+            \hline
+            \hline
+            \end{tabular}
+        \end{table}
+        \begin{figure}[h]
+                \centering
+                \includegraphics[width=1.25\linewidth]{Economic Data Analysis//Problem Sets//PS4/p_1b.png}
+            \end{figure}
+        \end{itemize}
+        \item Define the outcome as log traffic fatalities per capita. What would be problematic if we measured the outcome as just the number of traffic fatalities?
+        \begin{itemize}
+            \item We need to use per capita as the more populous states will always have more fatalities as a function of having a higher population. Using raw population would turn this into a population analysis instead of analyzing policy effects. Using the log transformation instead of the raw per capita rate better standardizes the distribution of fatalities, making the outcomes more cogent.
+        \end{itemize}
+        \item State the parallel trends assumption in words (try to be as precise and concise as you can and please avoid simply translating the math expression in words).
+        \begin{itemize}
+            \item The parallel trends assumption states that both treated and untreated states would have followed (and would continue to follow) the same slope for the outcome variable, log traffic fatalities per capita, if no treatment had been applied.
+        \end{itemize}
+        \item Plot raw outcome data in a way that may be helpful for later difference-in-differences (DiD) analysis (\verb|panelview| may come in handy here too). From this graph, can you say anything about the plausibility of the parallel trends and no anticipation assumptions as well as the effects of primary belt laws?
+        \begin{itemize}
+            \item Based on the spaghetti plot, there is no initial reason to reject the parallel trends and no anticipation assumptions. A consistent downward trend exists regardless of treatment group to satisfy parallel trends, and there does not appear to be a jump immediately after treatment, implying no assumption effect.
+            \begin{figure}[h]
+                \centering
+                \includegraphics[width=1\linewidth]{Economic Data Analysis//Problem Sets//PS4/p_1e.png}
+            \end{figure}
+        \end{itemize}
+        \item Now, conduct a test for anticipation effects. One way of doing this is to run a two way fixed effects regression on the untreated data only. The coefficients of interest will be time period indicators leading up to the treatment. Show these coefficients along with the appropriate standard errors in a table or as a figure. What do you observe?
+        \begin{itemize}
+            \item After running the fixed effects OLS regression, both when looking at the coefficients and standard errors of the regression output and in the plot, we see that the leads are all close to zero with nothing that looks like an anticipatory jump. The confidence intervals all span zero and get less noisy as they approach the treatment time.
+            \begin{figure}[h]
+                \centering
+                \includegraphics[width=1.25\linewidth]{Economic Data Analysis//Problem Sets//PS4/p_1f.png}
+            \end{figure}
+        \end{itemize}
+    \end{enumerate}
+    \item Difference-in-Differences (DID) Analysis:\\\\
+    You may use canned commands to implement DID or code it manually. For the event study specifications, report the estimates visually along with 95\% confidence bands.
+    \begin{enumerate}[(a)]
+        \item Use the static Two Way Fixed Effects (TWFE) to estimate the treatment effect of primary belt law. Interpret the treatment effect.
+        \begin{itemize}
+            \item Using static TWFE, we find that enacting a primary seat belt laws reduces fatalities by 8.6\%. With Claude's help, we find that this 8.6\% reduction represents 21,923 fatalities prevented based on the counterfactual estimate.
+        \begin{table}[h]
+            \centering
+            \caption*{2a. Static TWFE OLS}
+            \begin{tabular}{lc}
+            \hline
+            \hline
+            & \textbf{Estimate} \\
+            \hline
+            Primary & -0.086\\
+            & (0.033)\\
+            \hline
+            Observations & 1104 \\
+            Fixed Effects: State & 48\\
+            Fixed Effects: Year & 23\\
+            R$^2$ & 0.901 \\
+            \hline
+            \hline
+            \end{tabular}
+        \end{table}
+        \end{itemize}
+        \newpage
+        \item Refer to your summary from \verb|panelview| for part 1(a), and list any three examples of $2 \times 2$ comparisons that the TWFE specification you estimated above performs. Briefly state which comparisons could be problematic?
+        \begin{itemize}
+            \item Since this is a DID, there are actually four comparisons we can make:
+            \begin{itemize}
+                \item Early Treated vs. Never Treated
+                \item Late Treated vs. Never Treated
+                \item Late Treated vs. Early Treated: Most problematic. The post-treatment trend for the early treated group is not a good counterfactual for the late treated group. This comparison has the highest risk of bias.
+                \item Early Treated vs. Late Treated: Potentially problematic- difficult to isolate anticipation effects along with sample size concerns
+            \end{itemize}
+        \end{itemize}
+        \item Use Callaway and Sant'Anna (2021) group-time average estimator to estimate the event study specification. Use the 'never-treated group' as the control group for the treated units. What is the overall ATT estimate? Are the estimates different if you also use the 'not-yet-treated' group as controls?
+        \begin{itemize}
+            \item The overall ATT estimate is basically identical for both never-treated and not-yet treated at ~0.096 and -0.095, respectively. Using CS instead of the classic TWFE, we find a greater magnitude of the effect of seatbelt laws on fatalities with a tighter standard error.
+            \begin{table}[h]
+            \centering
+            \caption*{2c. Callaway-Sant'Anna (g,t) Estimator}
+            \begin{tabular}{lcc}
+            \hline
+            \hline
+            \textbf{Control}& \textbf{Estimate} & \textbf{SE}\\
+            \hline
+            Never-Treated & $-0.096$ & $-0.028$\\
+            Not-Yet-Treated & $-0.095$ & $-0.029$\\
+            \hline
+            \hline
+            \end{tabular}
+        \end{table}
+        \begin{figure}[h]
+                \centering
+                \includegraphics[width=.95\linewidth]{Economic Data Analysis//Problem Sets//PS4/p_2c_never-treated.png}
+            \end{figure}
+            \begin{figure}[h]
+                \centering
+                \includegraphics[width=.95\linewidth]{Economic Data Analysis//Problem Sets//PS4/p_2c_not-yet-treated.png}
+            \end{figure}\quad 
+        \end{itemize}
+        \item Implement the Borusyak, Jaravel, and Spiess (2022) (BJS) imputation estimator for the event-study specification. How does the event-study from BJS compare with the event-study from Callaway and Sant'Anna estimator?
+        \begin{itemize}
+            \item The event-study from BJS looks nearly identical to the ES from the two Callaway-Sant'Anna estimators. There is some difference in the extremely early pre-periods (i.e., t=-20, -21, -22), but all three specifications show similar and valid pre-trends consistent with the parallel trends and no anticipation assumption along with statistically significant effect sizes further from t=0.
+            \begin{figure}[h]
+                \centering
+                \includegraphics[width=1.25\linewidth]{Economic Data Analysis//Problem Sets//PS4/p_2d.png}
+            \end{figure}
+        \end{itemize}
+    \end{enumerate}
+    
+    \newpage
+    
+    \item Oftentimes authors conduct several robustness checks and placebo tests to check the sensitivity of the baseline results to violations of key assumptions. We will conduct a few such tests too:
+    \begin{enumerate}[(a)]
+        \item Notice that several states have both primary and secondary belt laws. Briefly describe how this could be a potential concern to your DID analysis above (hint: reflect back to your finding in part 1.b).
+        \begin{itemize}
+            \item The 1b analysis shows that 11 states enacted a secondary seatbelt law in advance of a primary seatbelt law. This is a significant confounding risk, especially without knowing the specifics of those laws. The Anderson 2008 paper does not explicitly state how primary vs. secondary laws are categorized. Based on the information available, we would assume that the effects of all of the different secondary laws are heterogeneous, further limiting our robustness.
+        \end{itemize}
+        \newpage
+        \item Estimate the event-study by controlling for state-specific linear trends in the BJS imputation estimator. Do the results seem robust?
+        \begin{itemize}
+            \item No, these results do not seem robust. First, in the post-treatment side, the effect sizes are both very small and statistically insignificant as shown by the error bars. Additionally, there does appear to be a potential pre-trend concern from $t = -4$ to $t = -1$.
+            \begin{figure}[h]
+                \centering
+                \includegraphics[width=1.25\linewidth]{Economic Data Analysis//Problem Sets//PS4/p_3b.png}
+            \end{figure}
+        \end{itemize}
+        \newpage
+        \item Estimate the event-study with time-varying control for vehicle-miles traveled per capita (use the BJS estimator). Do the results seem robust? What could be a potential concern with this control?
+            \begin{itemize}
+            \item These results do seem robust, both pre- and post-treatment. There are potentially some slight pre-trends from $t=-4$ to $t=-1$ when controlled for VMT, but the post-treatment effects look consistent (and significant) over time. One risk with using VMT is that safer roadways from primary seatbelt laws might lead to more driving over time in a sort of self-fulfilling prophecy as VMT are endogenous to the treatment we're trying to study.
+            \begin{figure}[h]
+                \centering
+                \includegraphics[width=1.25\linewidth]{Economic Data Analysis//Problem Sets//PS4/p_3c.png}
+            \end{figure}
+        \end{itemize}
+        \newpage
+        \item Consider parallel trends conditional on the percent of college graduates in 1981 (a time-invariant control). You may use the BJS or CS estimator. Is the event study different than the one you obtained under unconditional parallel trends?
+        \begin{itemize}
+            \item Yes, using BJS conditional on the college graduation rate outputs results that seem robust and very similar to the previous analyses. Pre-trends look good, and post-trends remain consistently downwards and significant over time. Based on all of the robustness checks we have conducted here, it does seem like we can reasonably conclude that primary seatbelt laws did in fact save lives. 
+            \begin{figure}[h]
+                \centering
+                \includegraphics[width=1.25\linewidth]{Economic Data Analysis//Problem Sets//PS4/p_3d.png}
+            \end{figure}
+        \end{itemize}
+    \end{enumerate}
+\end{enumerate}
+
+\end{document}

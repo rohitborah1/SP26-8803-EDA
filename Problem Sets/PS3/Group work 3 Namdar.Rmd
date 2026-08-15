@@ -1,0 +1,123 @@
+---
+title: "Group work 3 Namdar"
+author: "Bugrahan Namdar"
+date: "2026-03-19"
+output: html_document
+---
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(AER)  
+
+df <- read_excel("C:\\Desktop\\AK1991.xlsx")
+
+set.seed(42)
+n        <- 250      # sample size per replication
+B0       <- 1.0      # true coefficient
+sigma_xi  <- 1.0     # std dev of measurement error in D1
+sigma_eta <- 1.0     # std dev of measurement error in D2
+n_sims   <- 10000    # number of Monte Carlo replications
+
+# Storage vectors
+coef_a <- numeric(n_sims)   # (a) OLS on true D
+coef_b <- numeric(n_sims)   # (b) OLS on D1 (mismeasured)
+coef_c <- numeric(n_sims)   # (c) IV: D1 instrumented by D2
+
+
+# Monte Carlo Loop
+for (i in 1:n_sims) {
+  idx  <- sample(nrow(df), n, replace = TRUE)
+  D    <- df$edu[idx]
+#Structural error and outcomes
+  eps  <- rnorm(n, 0, 1)
+#True Model
+  Y    <- D * B0 + eps
+#Mismeasured versions of model
+  xi   <- rnorm(n, 0, sigma_xi)
+  eta  <- rnorm(n, 0, sigma_eta)
+  D1   <- D + xi
+  D2   <- D + eta
+
+#a) OLS: Y on true D
+coef_a[i] <- coef(lm(Y ~ D))[["D"]]
+
+#b) OLS: Y on D1 (attenuation bias expected)
+coef_b[i] <- coef(lm(Y ~ D1))[["D1"]]
+
+#c) IV: instrument D1 with D2 (2SLS via ivreg)
+coef_c[i] <- coef(ivreg(Y ~ D1 | D2))[["D1"]]
+}
+
+
+#Results
+cat(sprintf("Parameters: B0 = %.1f | n = %d | n_sims = %d\n",
+            B0, n, n_sims))
+cat(sprintf("sigma_xi = %.1f | sigma_eta = %.1f\n\n",
+            sigma_xi, sigma_eta))
+
+cat(sprintf("(a) OLS on true D  – Median: %.4f\n", median(coef_a)))
+cat(sprintf("(b) OLS on D1      – Median: %.4f\n", median(coef_b)))
+
+# Theoretical attenuation factor
+var_D       <- var(df$edu)
+attenuation <- B0 * var_D / (var_D + sigma_xi^2)
+cat(sprintf("    Theoretical: B0 * Var(D)/(Var(D)+sigma_xi^2) = %.4f\n",
+            attenuation))
+
+cat(sprintf("(c) IV  (D1 ~ D2)  – Median: %.4f\n\n", median(coef_c)))
+
+
+# Plot: Density of the three estimators
+xlim_range <- range(c(coef_a, coef_b, coef_c), na.rm = TRUE)
+xlim_range <- c(max(xlim_range[1], -1), min(xlim_range[2], 3))
+
+da <- density(coef_a)
+db <- density(coef_b)
+dc <- density(coef_c)
+
+plot(da, col = "forestgreen", lwd = 2,
+     xlim = xlim_range,
+     ylim = c(0, max(da$y, db$y, dc$y) * 1.15),
+     main = "Measurement Error Simulation (10,000 reps)",
+     xlab = expression(hat(beta)[0]),
+     ylab = "Density")
+lines(db, col = "firebrick",  lwd = 2)
+lines(dc, col = "steelblue",  lwd = 2)
+abline(v = B0, lty = 2, lwd = 1.5)
+abline(v = attenuation, lty = 3, col = "firebrick", lwd = 1.5)
+legend("topright",
+       legend = c(
+         sprintf("(a) OLS true D  (med = %.3f)", median(coef_a)),
+         sprintf("(b) OLS D1      (med = %.3f)", median(coef_b)),
+         sprintf("(c) IV D1~D2    (med = %.3f)", median(coef_c)),
+         sprintf("True B0 = %.1f", B0),
+         sprintf("Theoretical att. = %.4f", attenuation)
+       ),
+       col    = c("forestgreen", "firebrick", "steelblue", "black", "firebrick"),
+       lty    = c(1, 1, 1, 2, 3),
+       lwd    = c(2, 2, 2, 1.5, 1.5),
+       cex    = 0.8)
+
+
+cat("Short Note\n")
+cat(
+"(a) OLS on the true regressor D is unbiased and consistent,
+    recovering B0 = 1 precisely (median ~ 1.000).
+
+(b) Replacing D with the mismeasured proxy D1 = D + xi introduces
+    classical measurement error. OLS is no longer consistent: the
+    estimate is attenuated (biased toward zero). The attenuation
+    factor is Var(D) / (Var(D) + sigma_xi^2). With Var(edu) ~ 10.77
+    and sigma_xi^2 = 1, theory predicts a factor of ~ 0.915, and
+    the simulation median of ~ 0.915 confirms this exactly.
+
+(c) Using the second noisy measure D2 = D + eta as an instrument for
+    D1 corrects the attenuation bias. D2 is correlated with D1
+    through the shared true D (relevance) but uncorrelated with xi
+    (exclusion restriction), making it a valid instrument. The IV
+    median ~ 1.000 recovers the true B0, consistent with theory.\n"
+)
+
+```

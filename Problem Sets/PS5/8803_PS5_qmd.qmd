@@ -1,0 +1,238 @@
+---
+title: "8803_PS5_qmd"
+author: "Rohit Borah"
+format: html
+editor: visual
+---
+
+## ECON 8803: PS5
+
+Rohit Borah & Mingyu Li
+
+April 23, 2026
+
+```{r}
+## Load requisite packages.
+
+library(readr)
+library(tidyverse)
+library(ggthemes)
+library(gt)
+library(dfidx)
+library(mlogit)
+library(stargazer)
+library(modelsummary)
+```
+
+```{r}
+## Import data.
+df_ps5 <- read_csv("ps5_data.csv")
+
+# Working dataset
+df <- df_ps5
+
+## str(df)
+```
+
+### 1. Summary Statistics Table
+
+Create a summary statistics table summarizing the characteristics of each car model chosen and not chosen across all consumers.
+
+```{r}
+## 1. Summary statistics data.
+
+df_stats <- df %>%
+  group_by(cs, choice) %>%
+  summarize(
+    n = n(),
+    mean_price = round(mean(price), 3),
+    sd_price = round(sd(price), 3),
+    mean_quality = round(mean(quality), 3),
+    sd_quality = round(sd(quality), 3),
+    mean_cost = round(mean(cost), 3),
+    sd_cost = round(sd(cost), 3),
+    mean_dist_price = round(mean(dist_price), 3),
+    sd_dist_price = round(sd(dist_price), 3),
+    mean_dist_quality = round(mean(dist_quality), 3),
+    sd_dist_quality = round(sd(dist_quality), 3),
+    mean_dist_cost = round(mean(dist_cost), 3),
+    sd_dist_cost = round(sd(dist_cost), 3),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Model = cs,
+    Status = if_else(choice == 1, "Chosen", "Not chosen")
+  ) %>%
+  select(Model, Status, n,
+         mean_price, sd_price,
+         mean_quality, sd_quality,
+         mean_cost, sd_cost,
+         mean_dist_price, sd_dist_price,
+         mean_dist_quality, sd_dist_quality,
+         mean_dist_cost, sd_dist_cost)
+
+# View(df_stats)
+```
+
+### 2. Conditional Logit Model
+
+Estimate a conditional logit model for the random utility model in Equation (1). Do you think the coefficients have the expected signs? Why or why not?
+
+```{r}
+# 2. Conditional logit model
+
+df_mlogit <- dfidx(df,
+ choice = "choice",
+ idx = c("id", "cs"))
+
+m_2 <- mlogit(choice ~ price + quality + cost - 1, data = df_mlogit)
+
+summary(m_2)
+```
+
+### 3. Distance Variables + Conditional Logit Model
+
+Now add the distance variables in the above model. Do the coefficients of the variables change? Why do you think that is?
+
+```{r}
+# 3. Distance Variables + Conditional Logit
+
+m_3 <- mlogit(choice ~ price + quality + cost + dist_price + dist_quality + dist_cost - 1,
+ data = df_mlogit)
+
+summary(m_3)
+
+# stargazer(m_2, m_3)
+```
+
+### 4. Testing IIA Preferences
+
+Next, use the distance variables to test the null hypothesis of IIA preferences. In particular, for the conditional logit model you estimated in part 3, test the null hypothesis that variables measuring characteristics of rival products are excluded (as in Equation 1).
+
+What do you observe? (Note: Some of the distance variable are highly correlated with each other, so you may conduct this test by adding one distance variable at a time.)
+
+```{r}
+# 4. Testing IIA Preferences
+
+# Models with one distance variable at a time
+m_4a <- mlogit(choice ~ price + quality + cost + dist_price - 1, data = df_mlogit)
+
+m_4b <- mlogit(choice ~ price + quality + cost + dist_quality - 1, data = df_mlogit)
+
+m_4c <- mlogit(choice ~ price + quality + cost + dist_cost - 1, data = df_mlogit)
+
+# Models with 2/3 distance variables
+
+m_4d <- mlogit(choice ~ price + quality + cost + dist_price + dist_quality - 1, data = df_mlogit)
+
+m_4e <- mlogit(choice ~ price + quality + cost + dist_price + dist_cost - 1, data = df_mlogit)
+
+m_4f <- mlogit(choice ~ price + quality + cost + dist_quality + dist_cost - 1, data = df_mlogit)
+
+
+# LR tests vs restricted model (m_2): H0 = distance variable excluded (IIA holds)
+lrtest(m_2, m_3) # all three jointly
+lrtest(m_2, m_4a) # dist_price
+lrtest(m_2, m_4b) # dist_quality
+lrtest(m_2, m_4c) # dist_cost
+lrtest(m_2, m_4d) # dist_price + dist_quality
+lrtest(m_2, m_4e) # dist_price + dist_cost
+lrtest(m_2, m_4f) # dist_quality + dist_cost
+
+# Combining tests into one list
+ lr_tests <- list( 
+ "dist_price" = lrtest(m_2, m_4a), 
+ "dist_quality" = lrtest(m_2, m_4b), 
+ "dist_cost" = lrtest(m_2, m_4c), 
+ "dist_price + dist_quality" = lrtest(m_2, m_4d), 
+ "dist_price + dist_cost" = lrtest(m_2, m_4e), 
+ "dist_quality + dist_cost" = lrtest(m_2, m_4f), 
+ "all three" = lrtest(m_2, m_3)
+ ) 
+ 
+# Combining tests into one table
+t_4 <- map_dfr(lr_tests,
+ ~as.data.frame(.x)[2, c("Df", "LogLik", "Chisq", "Pr(>Chisq)")],
+ .id = "Variables Added") %>% 
+ gt() %>% 
+ tab_header(title = "LR Tests: H0 = Distance Variables Excluded (IIA)") %>%
+ fmt_number(columns = Chisq, decimals = 3) %>% 
+ fmt_number(columns = `Pr(>Chisq)`, decimals = 4) %>%
+ cols_label(Df = "df", Chisq = "Chi-sq", `Pr(>Chisq)` = "p-value") 
+
+t_4
+```
+
+### 5a. Effect of increasing price
+
+Based on the demand elasticities shown above, what can you say about the effect of increasing price of the most popular product (2 lines max)?
+
+```{r}
+# 5a. Effect of increasing prices.
+
+## No code required.
+```
+
+### 5b. Elasticity Matrix
+
+Now, for the conditional logit model you estimated in part 2, compute the elasticity matrix and show it in the same format as the one shown above.
+
+```{r}
+# 5b. Elasticity Matrix: CLAUDE
+
+## Note to GD: this was written almost wholly by Claude; we did not know how to do this.
+
+# Predicted probabilities (n x J matrix) and price coefficient from m_2
+probs  <- fitted(m_2, outcome = FALSE)
+beta_p <- coef(m_2)["price"]
+
+# Price matrix in wide format (n x J), sorted by individual
+price_wide <- df %>%
+  arrange(id, cs) %>%
+  pivot_wider(id_cols = id, names_from = cs, values_from = price) %>%
+  select(-id) %>%
+  as.matrix()
+
+# Compute average elasticities
+J    <- 6
+elas <- matrix(0, J, J)
+
+for (j in 1:J) {
+  for (k in 1:J) {
+    if (j == k) {
+      elas[j, k] <- mean(beta_p * price_wide[, k] * (1 - probs[, j]))
+    } else {
+      elas[j, k] <- mean(-beta_p * price_wide[, k] * probs[, k])
+    }
+  }
+}
+
+# Build display table
+elas_df <- as.data.frame(elas) %>%
+  setNames(as.character(1:J)) %>%
+  mutate(
+    Model = 1:J,
+    Share = round(colMeans(probs), 3),
+    Price = round(colMeans(price_wide), 3)
+  ) %>%
+  select(Model, Share, Price, everything())
+
+t_5b <- elas_df %>%
+  gt() %>%
+  tab_header(title = "5b. Elasticity Matrix — Conditional Logit (Model 2)") %>%
+  fmt_number(columns = -Model, decimals = 3) %>%
+  fmt_number(columns = Model, decimals = 0)
+
+t_5b
+```
+
+### 5c. IIA Property Across Models
+
+Intuitively (without using any math), what can you say about the IIA property across mixed logit vs conditional logit in this context (3-4 lines max)?
+
+```{r}
+# 5c. IIA Property Across Models
+
+## No code required.
+
+```

@@ -1,0 +1,209 @@
+## 8803 PS3
+## Rohit Borah 
+## March 2026
+
+
+# Load requisite libraries. -----------------------------------------------
+
+library(tidyverse)
+library(readxl)
+library(AER)
+
+# Import and manipulate data. ---------------------------------------------
+
+df_ak1991 <- read_excel("8803 EDA/Problem Sets/PS3/AK1991/AK1991.xlsx")
+
+df <- df_ak1991 # working dataset
+
+df_1000 <- head(df, 1000) # slice dataset for testing
+
+# Question 1: IV Four Ways ------------------------------------------------
+
+## 1a. Regular IV: tau_IV = (Z'X^{-1} Z'Y)
+
+# Regular IV via matrix formula (with intercept), just-identified J=K=1
+
+## Establish IV: z
+df_iv <- df %>% 
+  mutate(z = as.numeric(qob == 1)) %>% 
+  select(logwage, edu, z)
+
+
+Y <- as.matrix(df_iv$logwage)
+X_tilde <- cbind(1, df_iv$edu)
+Z_tilde <- cbind(1, df_iv$z)
+
+# Regular IV estimator: beta = (Z'X)^(-1) Z'Y
+beta_1a <- solve(t(Z_tilde) %*% X_tilde) %*% (t(Z_tilde) %*% Y)
+
+# Extract coefficient on education (second element)
+tau_1a <- as.numeric(beta_1a[2, 1])
+tau_1a
+
+
+# 1b. 2SLS ----------------------------------------------------------------
+
+# First stage: X on (1, Z) to get fitted values Xhat
+m_stage1 <- lm(edu ~ z, data = df_iv)
+
+df_iv <- df_iv %>% 
+  mutate(xhat = fitted(m_stage1))
+
+# Second stage: Y on (1, Xhat); coefficient on Xhat is the 2SLS estimate
+ss_fit <- lm(logwage ~ xhat, data = df_iv)
+tau_2sls <- coef(ss_fit)[["xhat"]]
+tau_2sls
+
+# 1c. Ratio IV ------------------------------------------------------------
+
+# Reduced form: Y on (1, Z)
+rf_fit <- lm(logwage ~ z, data = df_iv)
+pi_y <- coef(rf_fit)[["z"]]
+
+# First stage: X on (1, Z)
+pi_x <- coef(m_stage1)[["z"]]
+
+# Ratio IV
+tau_ratio <- as.numeric(pi_y / pi_x)
+tau_ratio
+
+# 1d. Moment Condition IV -------------------------------------------------
+
+# Solve moment conditions for beta = (alpha, tau)
+beta_mc <- solve(t(Z_tilde) %*% X_tilde) %*% (t(Z_tilde) %*% Y)
+
+# Extract tau (coefficient on edu)
+tau_mc <- as.numeric(beta_mc[2, 1])
+tau_mc
+
+c(tau_1a, tau_2sls, tau_ratio, tau_mc)
+
+# 2b. GD Sample Code ----------------------------------------------------------
+
+set.seed(123) # ensure reproducibility
+library("doParallel", quietly=TRUE)
+nCores <- detectCores()
+
+nsim <- 10000 # update to 10000 for actual run
+n <- 250
+beta0 <- 0
+cov <- .7
+l <- 15
+pi0 <- replicate(l, 1)/sqrt(n)
+
+#Simulation
+cl <- makeCluster(nCores); registerDoParallel(cl)
+Result <- foreach(i=1:nsim, .combine=rbind) %dopar% {
+  z <- t(replicate(n, rnorm(l))) # Instruments (n x l)
+  e <- rnorm(n) # Structural error
+  u <- rnorm(n) # first-stage error
+  x <- z %*% pi0 + sqrt(1-cov^2)*u + cov*e # Endogenous regressor
+  y <- x * beta0 + e # Outcome
+  
+  bOLS  <- coef(lm(y ~ x))[2]
+  xhat  <- z %*% solve(t(z) %*% z) %*% t(z) %*% x
+  b2SLS <- (t(xhat) %*% y) / (t(xhat) %*% x)
+  Pz <- z %*% solve(t(z) %*% z) %*% t(z)
+  Pz_ii <- diag(Pz)
+  xhat_jive <- (Pz %*% x - Pz_ii * x) / (1 - Pz_ii)
+  bJIVE <- (t(xhat_jive) %*% y) / (t(xhat_jive) %*% x)
+  
+  # First-stage F-stat
+  Fstat <- summary(lm(x ~ z))$fstatistic[1]
+  
+  # Control function comparison
+  v   <- residuals(lm(x ~ z))
+  cf  <- coef(lm(y ~ x + v))[2]
+  
+  c(bOLS, b2SLS, Fstat, bJIVE, cf)
+}
+
+#Cleanup
+stopCluster(cl); rm(cl)
+
+#Report
+c(
+  median(Result[, 1]),
+  median(Result[, 2]),
+  mean(Result[, 3]),
+  median(Result[, 4]),
+  median(Result[, 5]))
+
+
+# 3a. Regress Y_i on D_i and report the coefficient estimate.--------------
+## Regress Y_i on D_i and report the coefficient estimate.
+
+
+
+# 3b. Regress on Y_i on D_1i and report the estimate.----------------------
+## Regress on Y_i on D_1i and report the estimate.
+
+
+
+
+# 3c. Obtain the coefficient estimate from instrumenting D_1i with --------
+## D_2i
+
+
+
+
+# 3. Monte Carlo Simulation -----------------------------------------------
+
+set.seed(123)
+
+## Parameters
+n       <- 250      # sample size
+S       <- 10000    # number of replications
+beta0   <- 2.0      # true coefficient
+s2_xi   <- 1.0      # Var of measurement error in D1
+s2_eta  <- 1.0      # Var of measurement error in D2 (instrument)
+
+## Storage Objects
+ols_true <- numeric(S)   # (a) OLS on true D
+ols_meas <- numeric(S)   # (b) OLS on D1
+iv_est   <- numeric(S)   # (c) IV: D1 instrumented by D2
+
+## Monte Carlo Simulation
+for (s in seq_len(S)) {
+  
+  D   <- rnorm(n, 0, 1)
+  xi  <- rnorm(n, 0, sqrt(s2_xi))
+  eta <- rnorm(n, 0, sqrt(s2_eta))
+  eps <- rnorm(n, 0, 1)
+  
+  Y  <- beta0 * D + eps
+  D1 <- D + xi
+  D2 <- D + eta
+  
+  # (a) OLS: Y ~ D  (true regressor)
+  ols_true[s] <- coef(lm(Y ~ D))["D"]
+  
+  # (b) OLS: Y ~ D1  (mismeasured regressor)
+  ols_meas[s] <- coef(lm(Y ~ D1))["D1"]
+  
+  # (c) IV / 2SLS: regress Y on D1, using D2 as instrument
+  #     beta_IV = Cov(D2, Y) / Cov(D2, D1)
+  D1c <- D1 - mean(D1)
+  D2c <- D2 - mean(D2)
+  Yc  <- Y  - mean(Y)
+  iv_est[s] <- sum(D2c * Yc) / sum(D2c * D1c)
+}
+
+## Output Summary
+mc_summary <- function(x, name) {
+  data.frame(
+    Estimator = name,
+    Median    = median(x),
+    Mean      = mean(x),
+    Std_Dev   = sd(x),
+    row.names = NULL
+  )
+}
+
+results <- rbind(
+  mc_summary(ols_true, "(a) OLS on D"),
+  mc_summary(ols_meas, "(b) OLS on D1"),
+  mc_summary(iv_est,   "(c) IV D1 ~ D2")
+)
+
+View(results)

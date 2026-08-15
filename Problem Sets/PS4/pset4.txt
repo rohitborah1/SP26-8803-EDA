@@ -1,0 +1,38 @@
+
+. 
+. describe
+
+Contains data from /Users/gdoshi6/Dropbox/gd documents/Academics/Lectures/GA Tech/Econ Data Analysis/Spring 25/Problem Set
+> s/PS 3/PS 3 Data/pset3.dta
+ Observations:         1,104                  
+    Variables:            14                  28 Oct 2024 14:33
+--------------------------------------------------------------------------------------------------------------------------
+Variable      Storage   Display    Value
+    name         type    format    label      Variable label
+--------------------------------------------------------------------------------------------------------------------------
+state           byte    %8.0g      state_number
+                                              
+year            int     %9.0g                 
+college         float   %9.0g                 Pct College Grads (3 Yr MA)
+beer            float   %9.0g                 Per Capita Beer Consumption (gal of ethanol)
+primary         byte    %8.0g                 Primary Seat Belt Law
+secondary       byte    %8.0g                 Secondary Seat Belt Law
+population      double  %12.0g                Population (thousands)
+unemploy        float   %9.0g                 Unemployment Rate
+fatalities      float   %8.0g                 Traffic Fatalities
+totalvmt        float   %9.0g                 Vehicle Miles Traveled (VMT)
+precip          float   %9.0g                 Precipitation (inches)
+snow32          float   %9.0g                 Snow (inches)
+rural_speed     float   %9.0g                 Rural Interstate Speed Limit
+urban_speed     float   %9.0g                 Urban Interstate Speed Limit
+--------------------------------------------------------------------------------------------------------------------------
+Sorted by: 
+
+. 
+. log close
+      name:  <unnamed>
+       log:  /Users/gdoshi6/Dropbox/gd documents/Academics/Lectures/GA Tech/Econ Data Analysis/Spring 25/Problem Sets/PS 3
+> /PS 3 Data/pset3.txt
+  log type:  text
+ closed on:   3 Mar 2025, 17:45:50
+--------------------------------------------------------------------------------------------------------------------------
